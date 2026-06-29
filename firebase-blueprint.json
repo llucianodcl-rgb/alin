@@ -1,0 +1,77 @@
+{
+  "collections": {
+    "users": {
+      "description": "User profiles and permission levels",
+      "fields": {
+        "uid": {
+          "description": "Firebase Auth UID",
+          "type": "string"
+        },
+        "displayName": {
+          "description": "User's full name",
+          "type": "string"
+        },
+        "email": {
+          "description": "User's email address",
+          "type": "string"
+        },
+        "role": {
+          "description": "Access level: admin or reader",
+          "type": "string"
+        },
+        "status": {
+          "description": "Account status: pending, approved, or rejected",
+          "type": "string"
+        },
+        "requestedAt": {
+          "description": "Timestamp of the access request",
+          "type": "timestamp"
+        },
+        "decidedAt": {
+          "description": "Timestamp when the request was approved or rejected",
+          "type": "timestamp"
+        },
+        "decidedBy": {
+          "description": "UID of the administrator who handled the request",
+          "type": "string"
+        },
+        "photoURL": {
+          "description": "User's profile picture URL",
+          "type": "string"
+        }
+      }
+    },
+    "auditLogs": {
+      "description": "Logs of administrative actions",
+      "fields": {
+        "adminId": {
+          "type": "string"
+        },
+        "adminName": {
+          "type": "string"
+        },
+        "targetUserId": {
+          "type": "string"
+        },
+        "action": {
+          "type": "string"
+        },
+        "details": {
+          "type": "string"
+        },
+        "timestamp": {
+          "type": "timestamp"
+        }
+      }
+    },
+    "settings": {
+      "description": "Global application configuration and settings like appLogo",
+      "fields": {
+        "value": {
+          "description": "Base64 or URL string of the setting value",
+          "type": "string"
+        }
+      }
+    }
+  }
+}
