@@ -1,3 +1,17 @@
+export type LocationType = 'WAREHOUSE' | 'SECTOR' | 'AISLE' | 'SHELF' | 'LEVEL' | 'POSITION' | 'FREEZER' | 'COLD_ROOM' | 'RECEIVING' | 'DISPATCH' | 'EXTERNAL';
+
+export interface WarehouseLocation {
+  id?: string;
+  name: string;
+  code: string;
+  type: LocationType;
+  parentId?: string;
+  description?: string;
+  status: 'ACTIVE' | 'INACTIVE';
+  createdAt: string;
+  updatedAt: string;
+}
+
 export type Category = {
   id?: string;
   name: string;
@@ -42,7 +56,8 @@ export type Product = {
   deliveryDate?: string;
   noExpiration: boolean;
   expirationDate?: string;
-  location?: string;
+  locationId?: string;
+  locationPath?: string;
   description?: string;
   notes?: string;
   photoUrl?: string;
@@ -170,9 +185,105 @@ export interface Employee {
   createdAt: string;
 }
 
+export type InventoryStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+
+export type InventoryJustification = 'Quebra' | 'Produto vencido' | 'Perda' | 'Erro de lançamento' | 'Erro de contagem' | 'Avaria' | 'Produto furtado ou extraviado' | 'Outro';
+
+export interface InventoryItem {
+  productId: string;
+  systemQty: number;
+  physicalQty: number;
+  difference: number;
+  financialDiff: number;
+  justification?: InventoryJustification;
+  notes?: string;
+}
+
+export interface Inventory {
+  id?: string;
+  name: string;
+  responsibleId: string;
+  responsibleName: string;
+  startDate: string;
+  endDate?: string;
+  notes?: string;
+  type: 'FULL' | 'PARTIAL';
+  categories?: string[];
+  suppliers?: string[];
+  status: InventoryStatus;
+  totalSystemQty: number;
+  totalPhysicalQty: number;
+  totalDifference: number;
+  totalFinancialDifference: number;
+  items: InventoryItem[];
+  createdAt: string;
+  createdBy: string;
+  approvedBy?: string;
+  approvedAt?: string;
+}
+
+export type AuditModule = 'ALMOXARIFADO' | 'FINANCEIRO' | 'RH' | 'SISTEMA';
+export type AuditAction = 'CREATE' | 'UPDATE' | 'DELETE' | 'LOGIN' | 'LOGOUT' | 'SYNC' | 'ERROR' | 'APPROVE' | 'REJECT';
+
+export interface AuditLog {
+  id?: string;
+  userId: string;
+  userName: string;
+  timestamp: string;
+  module: AuditModule;
+  action: AuditAction;
+  targetId?: string;
+  targetName?: string;
+  oldValue?: any;
+  newValue?: any;
+  quantityChanged?: number;
+  details?: string;
+  device?: string;
+  syncStatus?: 'PENDING' | 'SYNCED' | 'ERROR';
+}
+
 export type Draft = {
   id: string;
   type: string;
   data: any;
   updatedAt: string;
 };
+
+export interface ImportTemplate {
+  id?: string;
+  name: string;
+  type: 'SALES' | 'PRODUCTS' | 'SUPPLIERS';
+  fieldMapping: Record<string, string>; // e.g., { 'barcode': 'coluna1', 'quantity': 'coluna2' }
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ImportHistory {
+  id?: string;
+  date: string;
+  fileName: string;
+  fileHash: string;
+  type: string;
+  recordsTotal: number;
+  successCount: number;
+  errorCount: number;
+  status: 'SUCCESS' | 'PARTIAL' | 'FAILED';
+  timeMs: number;
+  userId: string;
+  details?: string;
+  errors?: {row: number; reason: string; item?: any}[];
+}
+
+export interface ScanLog {
+  id?: string;
+  userId: string;
+  userName: string;
+  timestamp: string;
+  code: string;
+  format: string;
+  type: 'PRODUCT' | 'LOCATION' | 'EMPLOYEE' | 'OTHER';
+  targetId?: string;
+  targetName?: string;
+  operation: string;
+  device: string;
+}

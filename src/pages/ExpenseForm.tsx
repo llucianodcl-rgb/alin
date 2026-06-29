@@ -15,10 +15,11 @@ import { useNotification } from '../contexts/NotificationContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useFormDraft } from '../hooks/useFormDraft';
 import { Expense } from '../types';
+import { maskCurrency, parseCurrency } from '../utils/masks';
 
 const expenseSchema = z.object({
   description: z.string().min(2, 'Descrição é obrigatória'),
-  amount: z.preprocess((val) => Number(val) || 0, z.number().min(0.01, 'Valor deve ser maior que 0')),
+  amount: z.preprocess((val) => typeof val === 'string' ? parseCurrency(val) : Number(val) || 0, z.number().min(0.01, 'Valor deve ser maior que 0')),
   dueDate: z.string().min(1, 'Data de vencimento é obrigatória'),
   paymentDate: z.string().optional(),
   categoryId: z.string().optional(),
@@ -41,7 +42,7 @@ export default function ExpenseForm() {
   const { isReadOnly } = useAuth();
   const [oldData, setOldData] = useState<Expense | null>(null);
 
-  const { register, handleSubmit, reset, watch, clearDraft, formState: { errors } } = useFormDraft<ExpenseFormData>({
+  const { register, handleSubmit, reset, watch, setValue, clearDraft, formState: { errors } } = useFormDraft<ExpenseFormData>({
     formId: isEditing ? `expense_${id}` : 'expense_new',
     resolver: zodResolver(expenseSchema) as any,
     defaultValues: {
@@ -134,7 +135,14 @@ export default function ExpenseForm() {
               </div>
               <div className="space-y-2">
                 <Label>Valor (R$) *</Label>
-                <Input type="number" step="0.01" min="0.01" {...register('amount')} error={errors.amount?.message} />
+                <Input 
+                  {...register('amount')} 
+                  onChange={(e) => {
+                    const masked = maskCurrency(e.target.value);
+                    setValue('amount', masked as any, { shouldDirty: true });
+                  }}
+                  error={errors.amount?.message} 
+                />
               </div>
               <div className="space-y-2">
                 <Label>Vencimento *</Label>

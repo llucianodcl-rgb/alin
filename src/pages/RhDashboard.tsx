@@ -10,7 +10,9 @@ import {
   Calendar,
   Gift,
   Search,
-  X
+  X,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { cn } from '../utils/cn';
 import { useIsMobile } from '../hooks/useIsMobile';
@@ -26,8 +28,18 @@ export default function RhDashboard() {
   const isMobile = useIsMobile();
   const { navigateWithDirtyCheck } = useNavigation();
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
   
   const employees = useLiveQuery(() => db.employees.toArray());
+
+  const months = [
+    'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+    'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+  ];
+
+  const handlePrevMonth = () => setSelectedMonth(prev => prev === 0 ? 11 : prev - 1);
+  const handleNextMonth = () => setSelectedMonth(prev => prev === 11 ? 0 : prev + 1);
+
   
   const totalEmployees = employees?.length || 0;
   const activeEmployees = employees?.filter(e => e.status === 'ACTIVE').length || 0;
@@ -226,30 +238,59 @@ export default function RhDashboard() {
 
         <Card>
           <CardContent className="p-6">
-            <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
-              <Gift className="w-5 h-5 text-pink-500" /> Aniversariantes do Mês
-            </h3>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                <Gift className="w-5 h-5 text-pink-500" /> Aniversariantes de {months[selectedMonth]}
+              </h3>
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={handlePrevMonth}
+                  className="p-1 hover:bg-slate-100 rounded-lg transition-colors"
+                >
+                  <ChevronLeft className="w-4 h-4 text-slate-500" />
+                </button>
+                <button 
+                  onClick={handleNextMonth}
+                  className="p-1 hover:bg-slate-100 rounded-lg transition-colors"
+                >
+                  <ChevronRight className="w-4 h-4 text-slate-500" />
+                </button>
+              </div>
+            </div>
             <div className="space-y-4">
               {(() => {
-                const currentMonth = new Date().getMonth();
                 const birthdays = employees?.filter(e => {
                   if (!e.birthDate) return false;
-                  const birthMonth = new Date(e.birthDate).getMonth();
-                  return birthMonth === currentMonth;
+                  const birthMonth = new Date(e.birthDate).getUTCMonth();
+                  return birthMonth === selectedMonth;
+                }).sort((a, b) => {
+                  const dayA = new Date(a.birthDate!).getUTCDate();
+                  const dayB = new Date(b.birthDate!).getUTCDate();
+                  return dayA - dayB;
                 }) || [];
 
                 if (birthdays.length === 0) {
-                  return <p className="text-slate-500 text-sm">Nenhum aniversariante este mês.</p>;
+                  return (
+                    <div className="text-center py-6">
+                      <Gift className="w-8 h-8 text-slate-200 mx-auto mb-2" />
+                      <p className="text-slate-500 text-sm">Nenhum aniversariante em {months[selectedMonth]}.</p>
+                    </div>
+                  );
                 }
 
                 return birthdays.map(emp => (
                   <div key={emp.id} className="flex items-center justify-between border-b border-slate-100 pb-3 last:border-0 last:pb-0">
-                    <div>
-                      <p className="font-medium text-slate-800 text-sm">{emp.name}</p>
-                      <p className="text-xs text-slate-500">{emp.role}</p>
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-pink-50 flex items-center justify-center text-pink-500 font-bold text-xs">
+                        {new Date(emp.birthDate!).getUTCDate()}
+                      </div>
+                      <div>
+                        <p className="font-medium text-slate-800 text-sm">{emp.name}</p>
+                        <p className="text-xs text-slate-500">{emp.role}</p>
+                      </div>
                     </div>
-                    <div className="text-right text-sm font-bold text-pink-600">
-                      {emp.birthDate ? new Date(emp.birthDate).getDate() : ''} / {currentMonth + 1}
+                    <div className="text-right text-xs font-bold text-pink-600 bg-pink-50 px-2 py-1 rounded-full">
+                      Dia {new Date(emp.birthDate!).getUTCDate()}
                     </div>
                   </div>
                 ));

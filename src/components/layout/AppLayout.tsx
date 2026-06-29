@@ -40,15 +40,21 @@ const navigation = [
     name: 'Almoxarifado',
     icon: Package,
     type: 'group',
-    paths: ['/almoxarifado', '/produtos', '/categorias', '/fornecedores', '/entradas', '/saidas', '/historico'],
+    paths: ['/almoxarifado', '/produtos', '/categorias', '/fornecedores', '/entradas', '/saidas', '/historico', '/auditoria'],
     children: [
       { name: 'Dashboard', href: '/almoxarifado' },
+      { name: 'Mapa do Depósito', href: '/almoxarifado/mapa' },
       { name: 'Produtos', href: '/produtos' },
       { name: 'Categorias', href: '/categorias' },
       { name: 'Fornecedores', href: '/fornecedores' },
       { name: 'Entradas (NF)', href: '/entradas' },
       { name: 'Saídas', href: '/saidas' },
+      { name: 'Consulta Rápida', href: '/almoxarifado/consulta' },
+      { name: 'Etiquetas', href: '/almoxarifado/etiquetas' },
+      { name: 'Importações', href: '/almoxarifado/importacoes' },
+      { name: 'Inventário', href: '/almoxarifado/inventario' },
       { name: 'Histórico', href: '/historico' },
+      { name: 'Auditoria', href: '/auditoria' },
     ]
   },
   {
@@ -114,8 +120,8 @@ const resizeAndCompressImage = (file: File, maxWidth: number = 300, maxHeight: n
         }
 
         ctx.drawImage(img, 0, 0, width, height);
-        // Using image/png to preserve transparent background, resized size will be very small (<50KB)
-        const dataUrl = canvas.toDataURL('image/png');
+        // Using image/webp with quality to compress size aggressively and avoid Firestore limit
+        const dataUrl = canvas.toDataURL('image/webp', 0.8);
         resolve(dataUrl);
       };
       img.onerror = (err) => reject(err);

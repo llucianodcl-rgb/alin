@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -10,11 +10,16 @@ import { Input } from '../components/ui/Input';
 import { Label } from '../components/ui/Label';
 import { Select } from '../components/ui/Select';
 import { Card, CardContent } from '../components/ui/Card';
-import { ArrowLeft, Save } from 'lucide-react';
+import { ArrowLeft, Save, AlertTriangle, Camera } from 'lucide-react';
 import { Product } from '../types';
+import { ScannerDialog } from '../components/scanner/ScannerDialog';
 import { useNotification } from '../contexts/NotificationContext';
 import { useNavigation } from '../contexts/NavigationContext';
 import { useFormDraft } from '../hooks/useFormDraft';
+import { maskCurrency, parseCurrency } from '../utils/masks';
+
+import { auditService } from '../services/AuditService';
+import { useAuth } from '../contexts/AuthContext';
 
 const productSchema = z.object({
   name: z.string().min(2, 'Nome é obrigatório'),
@@ -26,14 +31,14 @@ const productSchema = z.object({
   unitOfMeasure: z.enum(['Unidade', 'Caixa', 'Fardo', 'Quilograma', 'Litro', 'Metro', 'Pacote', 'Outro']),
   minQuantity: z.coerce.number().min(0),
   quantityPerPackage: z.coerce.number().optional(),
-  unitCost: z.coerce.number().optional(),
-  packageCost: z.coerce.number().optional(),
+  unitCost: z.preprocess((val) => typeof val === 'string' ? parseCurrency(val) : Number(val) || 0, z.number().optional()),
+  packageCost: z.preprocess((val) => typeof val === 'string' ? parseCurrency(val) : Number(val) || 0, z.number().optional()),
   batch: z.string().optional(),
   manufactureDate: z.string().optional(),
   deliveryDate: z.string().optional(),
   noExpiration: z.boolean(),
   expirationDate: z.string().optional(),
-  location: z.string().optional(),
+  locationId: z.string().optional(),
   description: z.string().optional(),
   notes: z.string().optional(),
   initialQuantity: z.coerce.number().optional(),
@@ -43,23 +48,45 @@ type ProductFormData = z.infer<typeof productSchema>;
 
 export default function ProductForm() {
   const { id } = useParams();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { goBack } = useNavigation();
   const isEditing = !!id;
   const { confirm, showUndo } = useNotification();
+  const { profile } = useAuth();
   const [oldProductData, setOldProductData] = useState<Product | null>(null);
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
 
   const categories = useLiveQuery(() => db.categories.toArray());
   const suppliers = useLiveQuery(() => db.suppliers.toArray());
+  const locations = useLiveQuery(() => db.locations.toArray());
+
+  const getLocationPath = useCallback((locId: string): string => {
+    if (!locations) return '';
+    const path: string[] = [];
+    let current = locations.find(l => l.id === locId);
+    while (current) {
+      path.unshift(current.name);
+      if (current.parentId) {
+        current = locations.find(l => l.id === current!.parentId);
+      } else {
+        current = undefined;
+      }
+    }
+    return path.join(' > ');
+  }, [locations]);
 
   const { register, handleSubmit, watch, setValue, reset, clearDraft, formState: { errors, isSubmitting } } = useFormDraft<ProductFormData>({
     formId: isEditing ? `product_${id}` : 'product_new',
     resolver: zodResolver(productSchema) as any,
     defaultValues: {
       noExpiration: false,
-      unitOfMeasure: 'Unidade',
+      unitOfMeasure: searchParams.get('unit') || 'Unidade',
       minQuantity: 5,
       initialQuantity: 0,
+      barcode: searchParams.get('barcode') || '',
+      name: searchParams.get('name') || '',
+      brand: searchParams.get('brand') || '',
     } as any
   });
 
@@ -90,8 +117,28 @@ export default function ProductForm() {
           
           if (isEditing && id) {
             const previousData = { ...oldProductData! };
-            await db.products.update(id, productData);
+            const updatedData = {
+              ...productData,
+              locationPath: productData.locationId ? getLocationPath(productData.locationId) : undefined
+            };
+            await db.products.update(id, updatedData);
             
+            if (profile) {
+              await auditService.log({
+                userId: profile.uid,
+                userName: profile.displayName || profile.email || 'Usuário',
+                module: 'ALMOXARIFADO',
+                action: 'UPDATE',
+                targetId: id,
+                targetName: updatedData.name,
+                oldValue: previousData,
+                newValue: updatedData,
+                details: previousData.locationId !== updatedData.locationId 
+                  ? `Local alterado de ${previousData.locationPath || 'Nenhum'} para ${updatedData.locationPath || 'Nenhum'}`
+                  : 'Produto editado.'
+              });
+            }
+
             showUndo({
               message: 'Produto atualizado com sucesso.',
               onUndo: async () => {
@@ -103,6 +150,7 @@ export default function ProductForm() {
             const productToSave = {
               id: newProductId,
               ...productData,
+              locationPath: productData.locationId ? getLocationPath(productData.locationId) : undefined,
               currentStock: initialQuantity || 0
             };
             await db.products.add(productToSave as any);
@@ -119,6 +167,20 @@ export default function ProductForm() {
                 date: new Date().toISOString(),
                 notes: 'Estoque inicial (Cadastro)',
                 unitCost: data.unitCost
+              });
+            }
+            
+            if (profile) {
+              await auditService.log({
+                userId: profile.uid,
+                userName: profile.displayName || profile.email || 'Usuário',
+                module: 'ALMOXARIFADO',
+                action: 'CREATE',
+                targetId: newProductId,
+                targetName: productData.name,
+                newValue: productToSave,
+                quantityChanged: initialQuantity || 0,
+                details: 'Produto cadastrado.'
               });
             }
 
@@ -180,11 +242,28 @@ export default function ProductForm() {
 
               <div className="space-y-2">
                 <Label htmlFor="barcode">Código de Barras</Label>
-                <Input id="barcode" {...register('barcode')} placeholder="EAN-13, etc." />
+                <div className="flex gap-2">
+                  <Input id="barcode" {...register('barcode')} placeholder="EAN-13, etc." />
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    className="shrink-0 gap-2 border-dashed border-2 border-blue-200 text-blue-600 hover:bg-blue-50"
+                    onClick={() => setIsScannerOpen(true)}
+                  >
+                    <Camera className="w-4 h-4" />
+                    Ler Código
+                  </Button>
+                </div>
               </div>
             </div>
           </CardContent>
         </Card>
+
+        <ScannerDialog 
+          isOpen={isScannerOpen} 
+          onClose={() => setIsScannerOpen(false)}
+          mode="CADASTRO"
+        />
 
         <Card>
           <CardContent className="p-6 space-y-6">
@@ -243,7 +322,14 @@ export default function ProductForm() {
               
               <div className="space-y-2">
                 <Label htmlFor="unitCost">Custo Unitário (R$)</Label>
-                <Input id="unitCost" type="number" step="0.01" {...register('unitCost')} />
+                <Input 
+                  id="unitCost" 
+                  {...register('unitCost')} 
+                  onChange={(e) => {
+                    const masked = maskCurrency(e.target.value);
+                    setValue('unitCost', masked as any, { shouldDirty: true });
+                  }}
+                />
               </div>
             </div>
           </CardContent>
@@ -278,8 +364,25 @@ export default function ProductForm() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="location">Localização no Estoque</Label>
-                <Input id="location" {...register('location')} placeholder="Ex: Corredor A, Prateleira 4" />
+                <Label htmlFor="locationId">Localização no Estoque</Label>
+                <Select id="locationId" {...register('locationId')}>
+                  <option value="">Sem localização definida</option>
+                  {locations?.map(loc => (
+                    <option key={loc.id} value={loc.id}>
+                      {getLocationPath(loc.id!)}
+                    </option>
+                  ))}
+                </Select>
+                {locations?.length === 0 ? (
+                  <p className="text-xs text-amber-600">Cadastre a estrutura do depósito no Mapa Inteligente.</p>
+                ) : !watch('locationId') ? (
+                  <div className="flex items-start gap-2 bg-amber-50 p-2 rounded-lg border border-amber-200 mt-2">
+                    <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+                    <p className="text-xs text-amber-800">
+                      <strong>Dica Inteligente:</strong> Cadastre a localização física deste produto para facilitar processos de inventário, separação de pedidos e buscas no depósito.
+                    </p>
+                  </div>
+                ) : null}
               </div>
             </div>
           </CardContent>

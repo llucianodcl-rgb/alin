@@ -7,7 +7,9 @@ import { Input } from '../components/ui/Input';
 import { Label } from '../components/ui/Label';
 import { Select } from '../components/ui/Select';
 import { Card, CardContent } from '../components/ui/Card';
-import { ArrowUpFromLine, Save, Plus, Trash2 } from 'lucide-react';
+import { ArrowUpFromLine, Save, Plus, Trash2, Camera } from 'lucide-react';
+import { ScannerDialog } from '../components/scanner/ScannerDialog';
+import { maskCurrency, parseCurrency } from '../utils/masks';
 import { useNotification } from '../contexts/NotificationContext';
 import { cn } from '../utils/cn';
 
@@ -29,6 +31,25 @@ export default function ExitForm() {
 
   const [items, setItems] = useState<ExitItem[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
+
+  const addItemFromScan = (product: any) => {
+    const existingIndex = items.findIndex(i => i.productId === product.id);
+    if (existingIndex > -1) {
+      const newItems = [...items];
+      newItems[existingIndex].quantity += 1;
+      setItems(newItems);
+    } else {
+      setItems([
+        ...items,
+        { id: generateId(), productId: product.id!, quantity: 1, salePrice: 0 }
+      ]);
+    }
+    
+    if (navigator.vibrate) {
+      navigator.vibrate(100);
+    }
+  };
 
   const addItem = () => {
     setItems([
@@ -91,11 +112,12 @@ export default function ExitForm() {
                 });
 
                 // Generate Revenue if reason is Venda
-                if (reason === 'Venda' && (item.salePrice || 0) > 0) {
+                const salePrice = typeof item.salePrice === 'string' ? parseCurrency(item.salePrice) : item.salePrice;
+                if (reason === 'Venda' && (salePrice || 0) > 0) {
                   await db.revenues.add({
                     id: generateId(),
                     description: `Venda - ${product.name} (Qtd: ${item.quantity})`,
-                    amount: (item.salePrice || 0) * item.quantity,
+                    amount: (salePrice || 0) * item.quantity,
                     date: date,
                     source: 'SALE',
                     referenceId: eventId,
@@ -172,12 +194,37 @@ export default function ExitForm() {
         <Card>
           <CardContent className="p-6 space-y-6">
             <div className="flex justify-between items-center border-b pb-2">
-              <h2 className="text-lg font-semibold text-slate-900">Itens</h2>
-              <Button type="button" variant="outline" size="sm" onClick={addItem}>
-                <Plus className="w-4 h-4 mr-2" />
-                Adicionar Produto
-              </Button>
+              <h2 className="text-lg font-semibold text-slate-900">Itens para Saída/Picking</h2>
+              <div className="flex items-center gap-2">
+                <Button type="button" variant="outline" size="sm" onClick={() => setIsScannerOpen(true)} className="border-indigo-200 text-indigo-600 hover:bg-indigo-50">
+                  <Camera className="w-4 h-4 mr-2" />
+                  Escanear Produto
+                </Button>
+                <Button type="button" variant="outline" size="sm" onClick={() => {
+                  const sortedItems = [...items].sort((a, b) => {
+                    const prodA = products?.find(p => p.id === a.productId);
+                    const prodB = products?.find(p => p.id === b.productId);
+                    const locA = prodA?.locationPath || 'ZZZZZ';
+                    const locB = prodB?.locationPath || 'ZZZZZ';
+                    return locA.localeCompare(locB);
+                  });
+                  setItems(sortedItems);
+                }} title="Agrupa os itens pela localização física no depósito para facilitar a coleta">
+                  Rota Inteligente
+                </Button>
+                <Button type="button" variant="outline" size="sm" onClick={addItem}>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Adicionar Produto
+                </Button>
+              </div>
             </div>
+
+            <ScannerDialog 
+              isOpen={isScannerOpen}
+              onClose={() => setIsScannerOpen(false)}
+              onSelect={addItemFromScan}
+              mode="EXIT"
+            />
 
             <div className="space-y-4">
               {items.length === 0 ? (
@@ -185,7 +232,9 @@ export default function ExitForm() {
                   Nenhum item adicionado. Clique no botão acima para começar.
                 </div>
               ) : (
-                items.map((item, index) => (
+                items.map((item, index) => {
+                  const selectedProduct = products?.find(p => p.id === item.productId);
+                  return (
                   <div key={item.id} className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end bg-slate-50 p-4 rounded-lg border border-slate-200">
                     <div className={cn("space-y-2", reason === 'Venda' ? "md:col-span-4" : "md:col-span-7")}>
                       <Label>Produto *</Label>
@@ -201,6 +250,11 @@ export default function ExitForm() {
                           </option>
                         ))}
                       </Select>
+                      {selectedProduct?.locationPath && (
+                         <div className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded inline-block font-medium mt-1">
+                           📍 {selectedProduct.locationPath}
+                         </div>
+                      )}
                     </div>
                     <div className="space-y-2 md:col-span-3">
                       <Label>Quantidade *</Label>
@@ -209,7 +263,13 @@ export default function ExitForm() {
                     {reason === 'Venda' && (
                       <div className="space-y-2 md:col-span-3">
                         <Label>Preço de Venda (R$)</Label>
-                        <Input type="number" step="0.01" min="0" value={item.salePrice || ''} onChange={e => updateItem(item.id, 'salePrice', Number(e.target.value))} />
+                        <Input 
+                          value={typeof item.salePrice === 'number' ? maskCurrency(item.salePrice.toFixed(2).replace('.', '')) : item.salePrice} 
+                          onChange={e => {
+                            const masked = maskCurrency(e.target.value);
+                            updateItem(item.id, 'salePrice', masked);
+                          }} 
+                        />
                       </div>
                     )}
                     <div className="md:col-span-2 flex justify-end pb-1">
@@ -218,7 +278,8 @@ export default function ExitForm() {
                       </Button>
                     </div>
                   </div>
-                ))
+                  );
+                })
               )}
             </div>
           </CardContent>

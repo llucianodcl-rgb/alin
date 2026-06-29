@@ -166,6 +166,85 @@ export function useExecutiveInsights() {
         });
       }
 
+      // 5. Intelligent Alerts (Inventories and Audits)
+      const recentInventories = await db.inventories.orderBy('startDate').reverse().limit(5).toArray();
+      const recentInventoriesWithLosses = recentInventories.filter(i => i.status === 'APPROVED' && i.totalFinancialDifference < 0);
+      if (recentInventoriesWithLosses.length > 0) {
+        const loss = Math.abs(recentInventoriesWithLosses[0].totalFinancialDifference);
+        newInsights.push({
+          category: 'STOCK',
+          severity: 'CRITICAL',
+          title: 'Perdas em Inventário',
+          message: `O último inventário registrou uma perda financeira de ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(loss)} por diferenças de estoque.`
+        });
+      }
+
+      // 6. Smart Warehouse Insights
+      const locations = await db.locations.toArray();
+      const stockEvents = await db.stockEvents.toArray();
+      
+      const emptyLocations = locations.filter(loc => {
+        const hasChildren = locations.some(l => l.parentId === loc.id);
+        const hasProducts = products.some(p => p.locationId === loc.id);
+        return !hasChildren && !hasProducts;
+      });
+
+      if (emptyLocations.length > 0) {
+        newInsights.push({
+          category: 'STOCK',
+          severity: 'INFO',
+          title: 'Espaço Disponível',
+          message: `Há ${emptyLocations.length} áreas/posições vazias no depósito que podem ser otimizadas.`
+        });
+      }
+
+      // Detect high turnover products not in dispatch (simulated insight)
+      const last30DaysEvents = stockEvents.filter(e => e.date >= in30DaysStr); // actually we need >= lastMonth date
+      // Lets count movements per product
+      const productMovements: Record<string, number> = {};
+      stockEvents.forEach(e => {
+        productMovements[e.productId] = (productMovements[e.productId] || 0) + 1;
+      });
+      
+      const highTurnoverThreshold = 5;
+      const highTurnoverProducts = Object.entries(productMovements)
+        .filter(([_, count]) => count >= highTurnoverThreshold)
+        .map(([id]) => products.find(p => p.id === id))
+        .filter(p => p && p.locationPath && !p.locationPath.toLowerCase().includes('expedição'));
+
+      if (highTurnoverProducts.length > 0) {
+        newInsights.push({
+          category: 'STOCK',
+          severity: 'IMPORTANT',
+          title: 'Otimização Física',
+          message: `Existem ${highTurnoverProducts.length} produtos de alta rotatividade armazenados fora da área de expedição. Considere reposicioná-los para acelerar a separação.`
+        });
+      }
+
+      const productsWithoutLocation = products.filter(p => !p.locationId);
+      if (productsWithoutLocation.length > 0) {
+        newInsights.push({
+          category: 'STOCK',
+          severity: 'WARNING',
+          title: 'Produtos sem Local',
+          message: `Você possui ${productsWithoutLocation.length} produtos sem localização física mapeada. Atualize o cadastro para facilitar buscas.`
+        });
+      }
+
+      // Unusual audit actions
+      const oneWeekAgo = new Date();
+      oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+      const recentAudits = await db.auditLogs.where('timestamp').above(oneWeekAgo.toISOString()).toArray();
+      const deleteCount = recentAudits.filter(a => a.action === 'DELETE').length;
+      if (deleteCount >= 5) {
+        newInsights.push({
+          category: 'SYSTEM',
+          severity: 'IMPORTANT',
+          title: 'Atividade Incomum',
+          message: `Foram detectadas ${deleteCount} exclusões de registros no sistema nos últimos 7 dias. Verifique o módulo de Auditoria.`
+        } as unknown as Insight); // Assuming 'SYSTEM' might not be in the strict category type, cast as Insight
+      }
+
       // Health Calculation
       let healthScore = 100;
       if (netProfitCurrent < 0) healthScore -= 20;

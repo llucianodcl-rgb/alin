@@ -6,7 +6,9 @@ import {
   Users,
   Settings as SettingsIcon,
   LayoutDashboard,
-  Shield
+  Shield,
+  Camera,
+  Search
 } from 'lucide-react';
 import { cn } from '../utils/cn';
 import { ExecutivePanel } from '../components/layout/ExecutivePanel';
@@ -14,6 +16,15 @@ import { useNavigation } from '../contexts/NavigationContext';
 import { useAuth } from '../contexts/AuthContext';
 
 const MAIN_MODULES = [
+  {
+    title: 'Consulta Rápida',
+    description: 'Escanear ou buscar produtos',
+    icon: Search,
+    path: '/almoxarifado/consulta',
+    colorClass: 'text-amber-500',
+    bgClass: 'bg-amber-50',
+    arrowClass: 'text-amber-400'
+  },
   {
     title: 'Almoxarifado',
     description: 'Gestão de estoque e produtos',

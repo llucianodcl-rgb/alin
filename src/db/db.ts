@@ -1,5 +1,5 @@
 import Dexie, { type EntityTable } from 'dexie';
-import { Product, Category, Supplier, StockEvent, Expense, ExpenseCategory, CostCenter, Revenue, Employee, Insight } from '../types';
+import { Product, Category, Supplier, StockEvent, Expense, ExpenseCategory, CostCenter, Revenue, Employee, Insight, Inventory, AuditLog, WarehouseLocation, ImportTemplate, ImportHistory, ScanLog } from '../types';
 
 const db = new Dexie('AlinDB') as Dexie & {
   products: EntityTable<Product, 'id'>;
@@ -12,11 +12,17 @@ const db = new Dexie('AlinDB') as Dexie & {
   revenues: EntityTable<Revenue, 'id'>;
   employees: EntityTable<Employee, 'id'>;
   insights: EntityTable<Insight, 'id'>;
+  inventories: EntityTable<Inventory, 'id'>;
+  auditLogs: EntityTable<AuditLog, 'id'>;
+  locations: EntityTable<WarehouseLocation, 'id'>;
+  importTemplates: EntityTable<ImportTemplate, 'id'>;
+  importHistory: EntityTable<ImportHistory, 'id'>;
+  scanLogs: EntityTable<ScanLog, 'id'>;
 };
 
 // Schema declaration
-db.version(4).stores({
-  products: 'id, name, internalCode, barcode, categoryId, supplierId, expirationDate, currentStock',
+db.version(8).stores({
+  products: 'id, name, internalCode, barcode, categoryId, supplierId, expirationDate, currentStock, locationId',
   categories: 'id, name',
   suppliers: 'id, companyName, cnpj',
   stockEvents: 'id, productId, type, date, supplierId',
@@ -27,8 +33,15 @@ db.version(4).stores({
   employees: 'id, name, cpf, role, status',
   insights: 'id, date, category, severity',
   drafts: 'id, type, updatedAt',
-  settings: 'id'
-}).upgrade(tx => {
+  settings: 'id',
+  inventories: 'id, name, responsibleName, startDate, status',
+  auditLogs: 'id, userName, timestamp, module, action',
+  locations: 'id, name, code, type, parentId, status',
+  importTemplates: 'id, name, type',
+  importHistory: 'id, date, fileName, type, status',
+  scanLogs: 'id, timestamp, code, type, operation'
+})
+.upgrade(tx => {
   // Migration logic if needed
 });
 

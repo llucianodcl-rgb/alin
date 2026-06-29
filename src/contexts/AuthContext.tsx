@@ -8,6 +8,7 @@ import {
 } from 'firebase/auth';
 import { doc, getDoc, setDoc, onSnapshot, serverTimestamp } from 'firebase/firestore';
 import { auth, db, handleFirestoreError, OperationType } from '../lib/firebase';
+import { auditService } from '../services/AuditService';
 
 interface UserProfile {
   uid: string;
@@ -99,10 +100,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signIn = async () => {
     const provider = new GoogleAuthProvider();
-    await signInWithPopup(auth, provider);
+    const result = await signInWithPopup(auth, provider);
+    if (result.user) {
+      await auditService.log({
+        userId: result.user.uid,
+        userName: result.user.displayName || result.user.email || 'Usuário',
+        module: 'SISTEMA',
+        action: 'LOGIN',
+        details: 'Login efetuado com sucesso via Google'
+      });
+    }
   };
 
   const logout = async () => {
+    if (user) {
+      await auditService.log({
+        userId: user.uid,
+        userName: user.displayName || user.email || 'Usuário',
+        module: 'SISTEMA',
+        action: 'LOGOUT',
+        details: 'Logout efetuado'
+      });
+    }
     await signOut(auth);
   };
 

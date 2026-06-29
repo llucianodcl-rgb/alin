@@ -7,9 +7,13 @@ import { Input } from '../components/ui/Input';
 import { Label } from '../components/ui/Label';
 import { Select } from '../components/ui/Select';
 import { Card, CardContent } from '../components/ui/Card';
-import { ArrowDownToLine, Save, Plus, Trash2 } from 'lucide-react';
+import { ArrowDownToLine, Save, Plus, Trash2, Camera } from 'lucide-react';
 import { Product } from '../types';
+import { ScannerDialog } from '../components/scanner/ScannerDialog';
+import { maskCurrency, parseCurrency } from '../utils/masks';
 import { useNotification } from '../contexts/NotificationContext';
+import { useAuth } from '../contexts/AuthContext';
+import { auditService } from '../services/AuditService';
 
 type EntryItem = {
   id: string;
@@ -23,6 +27,7 @@ type EntryItem = {
 export default function EntryForm() {
   const navigate = useNavigate();
   const { confirm, showUndo } = useNotification();
+  const { profile } = useAuth();
   
   const suppliers = useLiveQuery(() => db.suppliers.toArray());
   const products = useLiveQuery(() => db.products.toArray());
@@ -34,6 +39,33 @@ export default function EntryForm() {
 
   const [items, setItems] = useState<EntryItem[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
+
+  const addItemFromScan = (product: Product) => {
+    // Check if product already in items
+    const existingIndex = items.findIndex(i => i.productId === product.id);
+    if (existingIndex > -1) {
+      const newItems = [...items];
+      newItems[existingIndex].quantity += 1;
+      setItems(newItems);
+    } else {
+      setItems([
+        ...items,
+        { 
+          id: generateId(), 
+          productId: product.id!, 
+          quantity: 1, 
+          unitCost: product.unitCost || 0, 
+          batch: product.batch || '', 
+          expirationDate: product.expirationDate || '' 
+        }
+      ]);
+    }
+    
+    if (navigator.vibrate) {
+      navigator.vibrate(100);
+    }
+  };
 
   const addItem = () => {
     setItems([
@@ -80,9 +112,11 @@ export default function EntryForm() {
 
                 // Update product stock
                 const newStock = (product.currentStock || 0) + item.quantity;
+                const unitCost = typeof item.unitCost === 'string' ? parseCurrency(item.unitCost) : item.unitCost;
+                
                 await db.products.update(product.id!, { 
                   currentStock: newStock,
-                  unitCost: item.unitCost > 0 ? item.unitCost : product.unitCost,
+                  unitCost: unitCost > 0 ? unitCost : product.unitCost,
                   batch: item.batch || product.batch,
                   expirationDate: item.expirationDate || product.expirationDate
                 });
@@ -98,15 +132,15 @@ export default function EntryForm() {
                   date,
                   supplierId,
                   invoiceNumber,
-                  unitCost: item.unitCost,
+                  unitCost: unitCost,
                   batch: item.batch,
                   expirationDate: item.expirationDate,
                   notes
                 });
 
                 // Generate Expense if cost > 0
-                if (item.unitCost > 0) {
-                  const totalCost = item.unitCost * item.quantity;
+                if (unitCost > 0) {
+                  const totalCost = unitCost * item.quantity;
                   await db.expenses.add({
                     id: generateId(),
                     description: `Compra de Mercadoria - ${product.name} (Qtd: ${item.quantity})`,
@@ -118,6 +152,19 @@ export default function EntryForm() {
                     recurrencePeriod: 'NONE',
                     referenceId: eventId,
                     createdAt: new Date().toISOString()
+                  });
+                }
+                
+                if (profile) {
+                  await auditService.log({
+                    userId: profile.uid,
+                    userName: profile.displayName || profile.email || 'Usuário',
+                    module: 'ALMOXARIFADO',
+                    action: 'CREATE',
+                    targetId: eventId,
+                    targetName: `Entrada: ${product.name}`,
+                    quantityChanged: item.quantity,
+                    details: `Qtd: ${item.quantity}`
                   });
                 }
               }
@@ -201,11 +248,24 @@ export default function EntryForm() {
           <CardContent className="p-6 space-y-6">
             <div className="flex justify-between items-center border-b pb-2">
               <h2 className="text-lg font-semibold text-slate-900">Itens</h2>
-              <Button type="button" variant="outline" size="sm" onClick={addItem}>
-                <Plus className="w-4 h-4 mr-2" />
-                Adicionar Produto
-              </Button>
+              <div className="flex gap-2">
+                <Button type="button" variant="outline" size="sm" onClick={() => setIsScannerOpen(true)} className="border-indigo-200 text-indigo-600 hover:bg-indigo-50">
+                  <Camera className="w-4 h-4 mr-2" />
+                  Escanear Produto
+                </Button>
+                <Button type="button" variant="outline" size="sm" onClick={addItem}>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Adicionar Produto
+                </Button>
+              </div>
             </div>
+
+            <ScannerDialog 
+              isOpen={isScannerOpen}
+              onClose={() => setIsScannerOpen(false)}
+              onSelect={addItemFromScan}
+              mode="ENTRY"
+            />
 
             <div className="space-y-4">
               {items.length === 0 ? (
@@ -239,7 +299,13 @@ export default function EntryForm() {
                     </div>
                     <div className="space-y-2 md:col-span-2">
                       <Label>Custo Unit. (R$)</Label>
-                      <Input type="number" step="0.01" min="0" value={item.unitCost || ''} onChange={e => updateItem(item.id, 'unitCost', Number(e.target.value))} />
+                      <Input 
+                        value={typeof item.unitCost === 'number' ? maskCurrency(item.unitCost.toFixed(2).replace('.', '')) : item.unitCost} 
+                        onChange={e => {
+                          const masked = maskCurrency(e.target.value);
+                          updateItem(item.id, 'unitCost', masked);
+                        }} 
+                      />
                     </div>
                     <div className="space-y-2 md:col-span-2">
                       <Label>Validade</Label>

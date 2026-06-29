@@ -14,12 +14,16 @@ import {
   CheckCircle2,
   Clock,
   Search,
-  X
+  X,
+  Map,
+  FileUp,
+  Camera
 } from 'lucide-react';
 import { cn } from '../utils/cn';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { useNavigation } from '../contexts/NavigationContext';
 import { matchText } from '../utils/search';
+import { ScannerDialog } from '../components/scanner/ScannerDialog';
 
 const MOBILE_MENU = [
   { title: 'Produtos', icon: Package, path: '/produtos', color: 'text-emerald-500', bg: 'bg-emerald-50' },
@@ -27,6 +31,7 @@ const MOBILE_MENU = [
   { title: 'Fornecedores', icon: Truck, path: '/fornecedores', color: 'text-orange-500', bg: 'bg-orange-50' },
   { title: 'Entradas (NF)', icon: ArrowDownToLine, path: '/entradas', color: 'text-blue-500', bg: 'bg-blue-50' },
   { title: 'Saídas', icon: ArrowUpFromLine, path: '/saidas', color: 'text-red-500', bg: 'bg-red-50' },
+  { title: 'Importações', icon: FileUp, path: '/almoxarifado/importacoes', color: 'text-indigo-500', bg: 'bg-indigo-50' },
   { title: 'Histórico', icon: History, path: '/historico', color: 'text-teal-500', bg: 'bg-teal-50' },
 ];
 
@@ -34,6 +39,7 @@ export default function AlmoxarifadoDashboard() {
   const isMobile = useIsMobile();
   const { navigateWithDirtyCheck } = useNavigation();
   const [searchQuery, setSearchQuery] = useState('');
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
   
   const products = useLiveQuery(() => db.products.toArray());
   const events = useLiveQuery(() => db.stockEvents.orderBy('date').reverse().limit(5).toArray());
@@ -41,10 +47,18 @@ export default function AlmoxarifadoDashboard() {
   const allEvents = useLiveQuery(() => db.stockEvents.toArray());
   const categories = useLiveQuery(() => db.categories.toArray());
   const suppliers = useLiveQuery(() => db.suppliers.toArray());
+  const imports = useLiveQuery(() => db.importHistory.orderBy('date').reverse().limit(5).toArray());
+  
+  const todayStart = new Date();
+  todayStart.setHours(0,0,0,0);
+  const todayImports = imports?.filter(i => new Date(i.date) >= todayStart) || [];
+  const todaySalesImported = todayImports.reduce((acc, curr) => acc + (curr.type === 'SALES' ? curr.successCount : 0), 0);
+  const todayErrors = todayImports.reduce((acc, curr) => acc + curr.errorCount, 0);
   
   const totalProducts = products?.length || 0;
   const outOfStock = products?.filter(p => p.currentStock <= 0).length || 0;
   const belowMin = products?.filter(p => p.currentStock > 0 && p.currentStock <= (p.minQuantity || 0)).length || 0;
+  const withoutLocation = products?.filter(p => !p.locationId).length || 0;
   const healthy = totalProducts > 0 ? Math.round(((totalProducts - outOfStock - belowMin) / totalProducts) * 100) : 100;
   
   const expiringSoon = products?.filter(p => p.expirationDate).slice(0, 3) || [];
@@ -80,8 +94,8 @@ export default function AlmoxarifadoDashboard() {
   const hasSearchResults = filteredProducts.length > 0 || filteredSuppliers.length > 0 || filteredCategories.length > 0 || filteredEvents.length > 0;
 
   const SearchBar = (
-    <div className="relative w-full mb-6">
-      <div className="relative">
+    <div className="relative w-full mb-6 flex gap-2">
+      <div className="relative flex-1">
         <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
         <input 
           type="text"
@@ -99,6 +113,19 @@ export default function AlmoxarifadoDashboard() {
           </button>
         )}
       </div>
+      <button 
+        onClick={() => setIsScannerOpen(true)}
+        className="px-4 py-3 bg-indigo-600 text-white rounded-2xl shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all flex items-center gap-2 font-bold text-sm shrink-0"
+      >
+        <Camera className="w-5 h-5" />
+        <span className="hidden sm:inline">Escanear</span>
+      </button>
+
+      <ScannerDialog 
+        isOpen={isScannerOpen} 
+        onClose={() => setIsScannerOpen(false)} 
+        mode="GENERAL"
+      />
     </div>
   );
 
@@ -129,6 +156,14 @@ export default function AlmoxarifadoDashboard() {
                     <div>
                       <p className="font-semibold text-slate-800">{p.name}</p>
                       <p className="text-slate-400">Cod: {p.internalCode || 'N/A'}</p>
+                      {p.locationPath ? (
+                        <div className="flex items-center gap-1 mt-1 text-blue-600 bg-blue-50 px-2 py-0.5 rounded w-fit">
+                          <Map className="w-3 h-3" />
+                          <span className="text-[10px] font-bold">{p.locationPath}</span>
+                        </div>
+                      ) : (
+                        <span className="text-[10px] text-amber-600 font-medium mt-1 inline-block">Sem local definido</span>
+                      )}
                     </div>
                     <div className="text-right">
                       <p className="font-bold text-slate-700">{p.currentStock} {p.unitOfMeasure}</p>
@@ -249,6 +284,10 @@ export default function AlmoxarifadoDashboard() {
               <p className="text-xs font-bold text-slate-400 uppercase">Saúde</p>
               <h3 className="text-xl font-bold text-emerald-600 mt-1">{healthy}%</h3>
             </Card>
+            <Card className="p-4 shadow-sm">
+              <p className="text-xs font-bold text-slate-400 uppercase">Sem Localização</p>
+              <h3 className="text-xl font-bold text-amber-600 mt-1">{withoutLocation}</h3>
+            </Card>
           </div>
         </div>
       </div>
@@ -267,33 +306,66 @@ export default function AlmoxarifadoDashboard() {
       
       {SearchResultsView}
       
-      <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+      <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
         <Card className="p-5 border-l-4 border-l-blue-500">
-          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Total de Produtos</p>
-          <h3 className="text-2xl font-bold text-slate-800">{totalProducts} <span className="text-xs font-normal text-slate-400">cadastrados</span></h3>
+          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Total Produtos</p>
+          <h3 className="text-2xl font-bold text-slate-800">{totalProducts}</h3>
         </Card>
         
         <Card className="p-5 border-l-4 border-l-emerald-500">
-          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Valor em Estoque</p>
+          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Valor Estoque</p>
           <h3 className="text-2xl font-bold text-slate-800">
-            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalValue)}
+            {new Intl.NumberFormat('pt-BR', { style: 'currency', notation: 'compact', compactDisplay: 'short' }).format(totalValue)}
           </h3>
         </Card>
 
         <Card className="p-5 border-l-4 border-l-red-500">
-          <div className="flex items-center justify-between mb-1">
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Esgotados</p>
-            <AlertTriangle className="w-4 h-4 text-red-500" />
-          </div>
-          <h3 className="text-2xl font-bold text-red-600">{outOfStock} <span className="text-xs font-normal text-slate-400">itens</span></h3>
+          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Esgotados</p>
+          <h3 className="text-2xl font-bold text-red-600">{outOfStock}</h3>
         </Card>
 
         <Card className="p-5 border-l-4 border-l-orange-500">
-          <div className="flex items-center justify-between mb-1">
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Abaixo do Mínimo</p>
-            <CalendarDays className="w-4 h-4 text-orange-500" />
-          </div>
-          <h3 className="text-2xl font-bold text-orange-600">{belowMin} <span className="text-xs font-normal text-slate-400">itens</span></h3>
+          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Abaixo Mínimo</p>
+          <h3 className="text-2xl font-bold text-orange-600">{belowMin}</h3>
+        </Card>
+
+        <Card className="p-5 border-l-4 border-l-amber-500">
+          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Sem Localização</p>
+          <h3 className="text-2xl font-bold text-amber-600">{withoutLocation}</h3>
+        </Card>
+      </section>
+
+      {/* Import Insights Section */}
+      <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <Card className="p-5 border-t border-slate-100 bg-gradient-to-br from-indigo-50 to-white shadow-sm">
+           <div className="flex items-center gap-2 mb-2">
+             <FileUp className="w-4 h-4 text-indigo-500" />
+             <p className="text-xs font-bold text-indigo-700 uppercase tracking-widest">Última Importação</p>
+           </div>
+           <h3 className="text-sm font-bold text-slate-800 truncate">
+             {imports && imports.length > 0 ? new Date(imports[0].date).toLocaleString('pt-BR') : 'Nenhuma importação'}
+           </h3>
+           <p className="text-xs text-slate-500 mt-1 truncate">{imports && imports.length > 0 ? imports[0].fileName : '-'}</p>
+        </Card>
+        <Card className="p-5 border-t border-slate-100 bg-gradient-to-br from-blue-50 to-white shadow-sm">
+           <div className="flex items-center gap-2 mb-2">
+             <ArrowUpFromLine className="w-4 h-4 text-blue-500" />
+             <p className="text-xs font-bold text-blue-700 uppercase tracking-widest">Vendas Importadas Hoje</p>
+           </div>
+           <h3 className="text-2xl font-bold text-slate-800">{todaySalesImported}</h3>
+        </Card>
+        <Card className="p-5 border-t border-slate-100 bg-gradient-to-br from-amber-50 to-white shadow-sm">
+           <div className="flex items-center gap-2 mb-2">
+             <AlertTriangle className="w-4 h-4 text-amber-500" />
+             <p className="text-xs font-bold text-amber-700 uppercase tracking-widest">Erros Hoje</p>
+           </div>
+           <h3 className="text-2xl font-bold text-amber-600">{todayErrors}</h3>
+        </Card>
+        <Card className="p-5 border-t border-slate-100 shadow-sm cursor-pointer hover:bg-slate-50 transition-colors" onClick={() => navigateWithDirtyCheck('/almoxarifado/importacoes')}>
+           <div className="flex h-full flex-col justify-center items-center text-center">
+             <FileUp className="w-6 h-6 text-slate-400 mb-2" />
+             <p className="text-sm font-bold text-slate-600">Central de Importações</p>
+           </div>
         </Card>
       </section>
 

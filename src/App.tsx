@@ -36,6 +36,18 @@ import CashFlow from './pages/CashFlow';
 import SimplifiedDre from './pages/SimplifiedDre';
 import InsightsHistory from './pages/InsightsHistory';
 import Admin from './pages/Admin';
+import { InventoryList } from './pages/InventoryList';
+import { InventoryCreate } from './pages/InventoryCreate';
+import { InventoryCount } from './pages/InventoryCount';
+import { InventoryDetail } from './pages/InventoryDetail';
+import { AuditList } from './pages/AuditList';
+import LocationList from './pages/LocationList';
+import ImportCenter from './pages/imports/ImportCenter';
+import SalesImport from './pages/imports/SalesImport';
+import ImportHistory from './pages/imports/ImportHistory';
+import ImportLayoutConfig from './pages/imports/ImportLayoutConfig';
+import QuickInquiry from './pages/QuickInquiry';
+import LabelPrint from './pages/LabelPrint';
 
 function HomeRouter() {
   const isMobile = useIsMobile();
@@ -72,6 +84,17 @@ function AnimatedRoutes() {
           
           {/* Almoxarifado */}
           <Route path="/almoxarifado" element={<AlmoxarifadoDashboard />} />
+          <Route path="/almoxarifado/mapa" element={<LocationList />} />
+          <Route path="/almoxarifado/importacoes" element={<ImportCenter />} />
+          <Route path="/almoxarifado/importacoes/vendas" element={<SalesImport />} />
+          <Route path="/almoxarifado/importacoes/historico" element={<ImportHistory />} />
+          <Route path="/almoxarifado/importacoes/configuracao" element={<ImportLayoutConfig />} />
+          <Route path="/almoxarifado/consulta" element={<QuickInquiry />} />
+          <Route path="/almoxarifado/etiquetas" element={<LabelPrint />} />
+          <Route path="/almoxarifado/inventario" element={<InventoryList />} />
+          <Route path="/almoxarifado/inventario/novo" element={<InventoryCreate />} />
+          <Route path="/almoxarifado/inventario/:id/contagem" element={<InventoryCount />} />
+          <Route path="/almoxarifado/inventario/:id" element={<InventoryDetail />} />
           <Route path="/produtos" element={<ProductsList />} />
           <Route path="/produtos/novo" element={<ProductForm />} />
           <Route path="/produtos/:id" element={<ProductForm />} />
@@ -92,6 +115,7 @@ function AnimatedRoutes() {
           
           {/* Configs */}
           <Route path="/configuracoes" element={<Settings />} />
+          <Route path="/auditoria" element={<AuthGuard requireAdmin><AuditList /></AuthGuard>} />
           
           <Route path="/admin" element={<AuthGuard requireAdmin><Admin /></AuthGuard>} />
           <Route path="*" element={<div className="p-8 text-center text-slate-500">Página em desenvolvimento...</div>} />

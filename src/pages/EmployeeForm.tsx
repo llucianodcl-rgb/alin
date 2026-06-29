@@ -15,6 +15,8 @@ import { useNavigation } from '../contexts/NavigationContext';
 import { useFormDraft } from '../hooks/useFormDraft';
 import { Employee } from '../types';
 
+import { maskCPF, maskPhone, maskCurrency, parseCurrency } from '../utils/masks';
+
 const employeeSchema = z.object({
   name: z.string().min(2, 'Nome é obrigatório'),
   cpf: z.string().optional(),
@@ -38,12 +40,12 @@ const employeeSchema = z.object({
   terminationDate: z.string().optional(),
   status: z.enum(['ACTIVE', 'VACATION', 'LEAVE', 'SUSPENDED', 'TERMINATED']),
   notes: z.string().optional(),
-  salary: z.preprocess((val) => Number(val) || 0, z.number().min(0, 'Salário deve ser maior que 0')),
-  transportAllowance: z.preprocess((val) => val === '' || val == null ? undefined : Number(val), z.number().optional()),
-  foodAllowance: z.preprocess((val) => val === '' || val == null ? undefined : Number(val), z.number().optional()),
-  commission: z.preprocess((val) => val === '' || val == null ? undefined : Number(val), z.number().optional()),
-  bonus: z.preprocess((val) => val === '' || val == null ? undefined : Number(val), z.number().optional()),
-  deductions: z.preprocess((val) => val === '' || val == null ? undefined : Number(val), z.number().optional()),
+  salary: z.preprocess((val) => typeof val === 'string' ? parseCurrency(val) : Number(val) || 0, z.number().min(0, 'Salário deve ser maior que 0')),
+  transportAllowance: z.preprocess((val) => val === '' || val == null ? undefined : (typeof val === 'string' ? parseCurrency(val) : Number(val)), z.number().optional()),
+  foodAllowance: z.preprocess((val) => val === '' || val == null ? undefined : (typeof val === 'string' ? parseCurrency(val) : Number(val)), z.number().optional()),
+  commission: z.preprocess((val) => val === '' || val == null ? undefined : (typeof val === 'string' ? parseCurrency(val) : Number(val)), z.number().optional()),
+  bonus: z.preprocess((val) => val === '' || val == null ? undefined : (typeof val === 'string' ? parseCurrency(val) : Number(val)), z.number().optional()),
+  deductions: z.preprocess((val) => val === '' || val == null ? undefined : (typeof val === 'string' ? parseCurrency(val) : Number(val)), z.number().optional()),
   payday: z.preprocess((val) => Number(val) || 1, z.number().min(1).max(31)),
   bank: z.string().optional(),
   agency: z.string().optional(),
@@ -61,7 +63,7 @@ export default function EmployeeForm() {
   const { confirm, showUndo } = useNotification();
   const [oldData, setOldData] = useState<Employee | null>(null);
 
-  const { register, handleSubmit, reset, watch, clearDraft, formState: { errors } } = useFormDraft<EmployeeFormData>({
+  const { register, handleSubmit, reset, watch, setValue, clearDraft, formState: { errors } } = useFormDraft<EmployeeFormData>({
     formId: isEditing ? `employee_${id}` : 'employee_new',
     resolver: zodResolver(employeeSchema) as any,
     defaultValues: {
@@ -166,7 +168,13 @@ export default function EmployeeForm() {
               </div>
               <div className="space-y-2">
                 <Label>CPF</Label>
-                <Input {...register('cpf')} />
+                <Input 
+                  {...register('cpf')} 
+                  onChange={(e) => {
+                    const masked = maskCPF(e.target.value);
+                    setValue('cpf', masked, { shouldDirty: true });
+                  }}
+                />
               </div>
               <div className="space-y-2">
                 <Label>RG</Label>
@@ -182,7 +190,13 @@ export default function EmployeeForm() {
               </div>
               <div className="space-y-2">
                 <Label>Celular / WhatsApp</Label>
-                <Input {...register('whatsapp')} />
+                <Input 
+                  {...register('whatsapp')} 
+                  onChange={(e) => {
+                    const masked = maskPhone(e.target.value);
+                    setValue('whatsapp', masked, { shouldDirty: true });
+                  }}
+                />
               </div>
             </div>
           </CardContent>
@@ -261,7 +275,14 @@ export default function EmployeeForm() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-2">
                 <Label>Salário (R$) *</Label>
-                <Input type="number" step="0.01" {...register('salary')} error={errors.salary?.message} />
+                <Input 
+                  {...register('salary')} 
+                  onChange={(e) => {
+                    const masked = maskCurrency(e.target.value);
+                    setValue('salary', masked as any, { shouldDirty: true });
+                  }}
+                  error={errors.salary?.message} 
+                />
               </div>
               <div className="space-y-2">
                 <Label>Dia do Pagamento *</Label>
@@ -269,11 +290,23 @@ export default function EmployeeForm() {
               </div>
               <div className="space-y-2">
                 <Label>Vale Transporte (R$)</Label>
-                <Input type="number" step="0.01" {...register('transportAllowance')} />
+                <Input 
+                  {...register('transportAllowance')} 
+                  onChange={(e) => {
+                    const masked = maskCurrency(e.target.value);
+                    setValue('transportAllowance', masked as any, { shouldDirty: true });
+                  }}
+                />
               </div>
               <div className="space-y-2">
                 <Label>Vale Alimentação (R$)</Label>
-                <Input type="number" step="0.01" {...register('foodAllowance')} />
+                <Input 
+                  {...register('foodAllowance')} 
+                  onChange={(e) => {
+                    const masked = maskCurrency(e.target.value);
+                    setValue('foodAllowance', masked as any, { shouldDirty: true });
+                  }}
+                />
               </div>
               <div className="space-y-2">
                 <Label>Chave PIX</Label>

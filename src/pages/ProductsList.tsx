@@ -12,11 +12,13 @@ import { useNotification } from '../contexts/NotificationContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useListState, useScrollPreservation } from '../hooks/useListState';
 
+import { auditService } from '../services/AuditService';
+
 export default function ProductsList() {
   const [searchTerm, setSearchTerm] = useListState('searchTerm', '');
   useScrollPreservation();
   const { confirm, showUndo } = useNotification();
-  const { isReadOnly } = useAuth();
+  const { isReadOnly, profile } = useAuth();
   
   const products = useLiveQuery(
     () => db.products.toArray(),
@@ -31,7 +33,22 @@ export default function ProductsList() {
       variant: 'destructive',
       onConfirm: async () => {
         // Execute deletion
-        await db.products.delete(product.id);
+        if (product.id) {
+          await db.products.delete(product.id);
+          
+          if (profile) {
+            await auditService.log({
+              userId: profile.uid,
+              userName: profile.displayName || profile.email || 'Usuário',
+              module: 'ALMOXARIFADO',
+              action: 'DELETE',
+              targetId: product.id,
+              targetName: product.name,
+              oldValue: product,
+              details: 'Produto excluído.'
+            });
+          }
+        }
         
         // Show undo snackbar
         showUndo({
@@ -92,6 +109,7 @@ export default function ProductsList() {
                 <th className="px-6 py-4">Produto</th>
                 <th className="px-6 py-4">Código</th>
                 <th className="px-6 py-4">Estoque Atual</th>
+                <th className="px-6 py-4">Localização</th>
                 <th className="px-6 py-4">Mínimo</th>
                 <th className="px-6 py-4 text-right">Ações</th>
               </tr>
@@ -99,7 +117,7 @@ export default function ProductsList() {
             <tbody className="divide-y divide-slate-100">
               {filteredProducts?.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-6 py-12 text-center text-slate-500">
+                  <td colSpan={6} className="px-6 py-12 text-center text-slate-500">
                     <div className="flex flex-col items-center justify-center">
                       <Package className="w-12 h-12 text-slate-300 mb-3" />
                       <p>Nenhum produto encontrado.</p>
@@ -128,6 +146,15 @@ export default function ProductsList() {
                         </span>
                         <span className="text-slate-400 ml-1 text-xs">{product.unitOfMeasure}</span>
                       </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      {product.locationPath ? (
+                        <div className="flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 bg-blue-50 text-blue-700 rounded-lg inline-flex">
+                          {product.locationPath}
+                        </div>
+                      ) : (
+                        <span className="text-xs text-slate-400">Sem local</span>
+                      )}
                     </td>
                     <td className="px-6 py-4 text-slate-600">
                       {product.minQuantity}

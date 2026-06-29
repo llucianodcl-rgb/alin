@@ -13,6 +13,7 @@ import { useNotification } from '../contexts/NotificationContext';
 import { useNavigation } from '../contexts/NavigationContext';
 import { useFormDraft } from '../hooks/useFormDraft';
 import { Supplier } from '../types';
+import { maskCNPJ, maskPhone } from '../utils/masks';
 
 const supplierSchema = z.object({
   companyName: z.string().min(2, 'Razão Social é obrigatória'),
@@ -43,7 +44,7 @@ export default function SupplierForm() {
   const { confirm, showUndo } = useNotification();
   const [oldSupplierData, setOldSupplierData] = useState<Supplier | null>(null);
 
-  const { register, handleSubmit, reset, clearDraft, formState: { errors, isSubmitting } } = useFormDraft<SupplierFormData>({
+  const { register, handleSubmit, reset, setValue, clearDraft, formState: { errors, isSubmitting } } = useFormDraft<SupplierFormData>({
     formId: isEditing ? `supplier_${id}` : 'supplier_new',
     resolver: zodResolver(supplierSchema) as any,
     defaultValues: {} as any
@@ -133,7 +134,14 @@ export default function SupplierForm() {
 
               <div className="space-y-2">
                 <Label htmlFor="cnpj">CNPJ</Label>
-                <Input id="cnpj" {...register('cnpj')} />
+                <Input 
+                  id="cnpj" 
+                  {...register('cnpj')} 
+                  onChange={(e) => {
+                    const masked = maskCNPJ(e.target.value);
+                    setValue('cnpj', masked, { shouldDirty: true });
+                  }}
+                />
               </div>
             </div>
           </CardContent>
@@ -150,11 +158,25 @@ export default function SupplierForm() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="phone">Telefone Fixo</Label>
-                <Input id="phone" {...register('phone')} />
+                <Input 
+                  id="phone" 
+                  {...register('phone')} 
+                  onChange={(e) => {
+                    const masked = maskPhone(e.target.value);
+                    setValue('phone', masked, { shouldDirty: true });
+                  }}
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="whatsapp">WhatsApp</Label>
-                <Input id="whatsapp" {...register('whatsapp')} />
+                <Input 
+                  id="whatsapp" 
+                  {...register('whatsapp')} 
+                  onChange={(e) => {
+                    const masked = maskPhone(e.target.value);
+                    setValue('whatsapp', masked, { shouldDirty: true });
+                  }}
+                />
               </div>
               <div className="space-y-2 md:col-span-2">
                 <Label htmlFor="email">E-mail</Label>
