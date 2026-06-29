@@ -27,8 +27,12 @@ export const AuthGuard: React.FC<AuthGuardProps> = ({ children, requireAdmin = f
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
         <div className="max-w-md w-full bg-white rounded-2xl shadow-xl shadow-slate-200 p-8 text-center space-y-6">
-          <div className="w-20 h-20 bg-blue-600 rounded-2xl flex items-center justify-center mx-auto shadow-lg shadow-blue-200">
-            <Shield className="w-10 h-10 text-white" />
+          <div className="flex justify-center">
+            <img 
+              src="/icon-192.png" 
+              alt="Logo ALIN" 
+              className="w-24 h-24 object-contain rounded-2xl shadow-lg shadow-blue-100"
+            />
           </div>
           <div className="space-y-2">
             <h1 className="text-2xl font-bold text-slate-900">Bem-vindo ao ALIN</h1>

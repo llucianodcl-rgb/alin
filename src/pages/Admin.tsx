@@ -51,7 +51,11 @@ const Admin = () => {
         ...doc.data(),
         uid: doc.id
       })) as UserProfile[];
-      setUsers(usersData);
+      
+      // Exclude the main admin/owner so they do not appear in the management dashboard or statistics
+      const filtered = usersData.filter(user => user.email !== 'llucianodcl@gmail.com');
+      
+      setUsers(filtered);
       setLoading(false);
     }, (error) => {
       console.error("Error in admin listener:", error);
