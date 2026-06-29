@@ -7,7 +7,6 @@ import {
   Users,
   UserPlus,
   Briefcase,
-  Calendar,
   Gift,
   Search,
   X,
@@ -15,17 +14,15 @@ import {
   ChevronRight
 } from 'lucide-react';
 import { cn } from '../utils/cn';
-import { useIsMobile } from '../hooks/useIsMobile';
 import { useNavigation } from '../contexts/NavigationContext';
 import { matchText } from '../utils/search';
 
-const MOBILE_MENU = [
+const QUICK_ACTIONS = [
   { title: 'Funcionários', icon: Users, path: '/funcionarios', color: 'text-indigo-500', bg: 'bg-indigo-50' },
   { title: 'Novo Funcionário', icon: UserPlus, path: '/funcionarios/novo', color: 'text-emerald-500', bg: 'bg-emerald-50' },
 ];
 
 export default function RhDashboard() {
-  const isMobile = useIsMobile();
   const { navigateWithDirtyCheck } = useNavigation();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
@@ -40,7 +37,6 @@ export default function RhDashboard() {
   const handlePrevMonth = () => setSelectedMonth(prev => prev === 0 ? 11 : prev - 1);
   const handleNextMonth = () => setSelectedMonth(prev => prev === 11 ? 0 : prev + 1);
 
-  
   const totalEmployees = employees?.length || 0;
   const activeEmployees = employees?.filter(e => e.status === 'ACTIVE').length || 0;
   const onLeave = employees?.filter(e => e.status === 'LEAVE' || e.status === 'VACATION').length || 0;
@@ -64,7 +60,7 @@ export default function RhDashboard() {
   const hasSearchResults = filteredEmployees.length > 0;
 
   const SearchBar = (
-    <div className="relative w-full mb-6">
+    <div className="relative w-full">
       <div className="relative">
         <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
         <input 
@@ -129,52 +125,9 @@ export default function RhDashboard() {
     </div>
   );
 
-  if (isMobile) {
-    return (
-      <div className="pb-8 space-y-6">
-        {SearchBar}
-        {SearchResultsView}
-        <div className="grid grid-cols-2 gap-4">
-          {MOBILE_MENU.map((item) => (
-            <button 
-              key={item.path} 
-              onClick={() => navigateWithDirtyCheck(item.path)}
-              className="w-full text-left bg-white rounded-3xl p-4 shadow-[0_2px_12px_rgba(0,0,0,0.04)] border border-slate-50 flex flex-col items-start relative overflow-hidden transition-transform active:scale-95 cursor-pointer"
-            >
-              <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center mb-3", item.bg, item.color)}>
-                <item.icon className="w-6 h-6" />
-              </div>
-              <h3 className="font-bold text-slate-800 text-[15px]">{item.title}</h3>
-            </button>
-          ))}
-        </div>
-
-        <div>
-          <h2 className="font-bold text-slate-800 text-lg mb-4">Resumo RH</h2>
-          <div className="grid grid-cols-2 gap-4">
-            <Card className="p-4 shadow-sm">
-              <p className="text-xs font-bold text-slate-400 uppercase">Ativos</p>
-              <h3 className="text-xl font-bold text-slate-800 mt-1">{activeEmployees}</h3>
-            </Card>
-            <Card className="p-4 shadow-sm">
-              <p className="text-xs font-bold text-slate-400 uppercase">Afastados/Férias</p>
-              <h3 className="text-xl font-bold text-orange-600 mt-1">{onLeave}</h3>
-            </Card>
-            <Card className="p-4 shadow-sm col-span-2">
-              <p className="text-xs font-bold text-slate-400 uppercase">Folha Salarial Estimada</p>
-              <h3 className="text-xl font-bold text-emerald-600 mt-1">
-                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalPayroll)}
-              </h3>
-            </Card>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Desktop Dashboard
   return (
     <div className="space-y-8 pb-12">
+      {/* Header & Search */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <h2 className="text-xl font-bold text-slate-800">Visão Geral do RH</h2>
         <div className="w-full md:max-w-md">
@@ -183,19 +136,38 @@ export default function RhDashboard() {
       </div>
       
       {SearchResultsView}
+
+      {/* Quick Actions (available on both mobile & desktop) */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {QUICK_ACTIONS.map((item) => (
+          <button 
+            key={item.path} 
+            onClick={() => navigateWithDirtyCheck(item.path)}
+            className="w-full text-left bg-white rounded-3xl p-4 shadow-[0_2px_12px_rgba(0,0,0,0.04)] border border-slate-50 flex flex-col items-start relative overflow-hidden transition-transform active:scale-95 hover:scale-[1.01] hover:shadow-md cursor-pointer"
+          >
+            <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center mb-3", item.bg, item.color)}>
+              <item.icon className="w-6 h-6" />
+            </div>
+            <h3 className="font-bold text-slate-800 text-[15px]">{item.title}</h3>
+          </button>
+        ))}
+      </div>
       
+      {/* Resumo / Statistics Grid */}
       <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Card className="p-5 border-l-4 border-l-indigo-500">
+        <Card className="p-5 border-l-4 border-l-indigo-500 shadow-sm">
           <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Total Ativos</p>
-          <h3 className="text-2xl font-bold text-slate-800">{activeEmployees} <span className="text-xs font-normal text-slate-400">colaboradores</span></h3>
+          <h3 className="text-2xl font-bold text-slate-800">
+            {activeEmployees} <span className="text-xs font-normal text-slate-400">colaboradores</span>
+          </h3>
         </Card>
         
-        <Card className="p-5 border-l-4 border-l-orange-500">
+        <Card className="p-5 border-l-4 border-l-orange-500 shadow-sm">
           <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Afastados/Férias</p>
           <h3 className="text-2xl font-bold text-orange-600">{onLeave}</h3>
         </Card>
 
-        <Card className="p-5 border-l-4 border-l-emerald-500 lg:col-span-2">
+        <Card className="p-5 border-l-4 border-l-emerald-500 sm:col-span-2 shadow-sm">
           <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Folha Salarial Estimada (Mês)</p>
           <h3 className="text-2xl font-bold text-emerald-600">
             {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalPayroll)}
@@ -203,8 +175,10 @@ export default function RhDashboard() {
         </Card>
       </section>
 
+      {/* Main Content Cards Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
+        {/* Active Employees Card */}
+        <Card className="shadow-sm">
           <CardContent className="p-6">
             <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
               <Briefcase className="w-5 h-5 text-indigo-600" /> Colaboradores Ativos
@@ -236,7 +210,8 @@ export default function RhDashboard() {
           </CardContent>
         </Card>
 
-        <Card>
+        {/* Birthdays Card */}
+        <Card className="shadow-sm">
           <CardContent className="p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-bold text-slate-800 flex items-center gap-2">
