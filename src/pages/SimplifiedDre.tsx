@@ -9,20 +9,24 @@ export default function SimplifiedDre() {
   const revenues = useLiveQuery(() => db.revenues.where('status').equals('RECEIVED').toArray(), []);
   const employees = useLiveQuery(() => db.employees.where('status').equals('ACTIVE').toArray(), []);
 
+  const revenueList = revenues || [];
+  const expenseList = expenses || [];
+  const employeeList = employees || [];
+
   // Calculation
-  const receitaBruta = revenues?.reduce((acc, r) => acc + r.amount, 0) || 0;
+  const receitaBruta = revenueList.reduce((acc, r) => acc + r.amount, 0);
   
   // Categorize expenses
   const impostos = 0; // Simplified for now, could add a flag in category
   const receitaLiquida = receitaBruta - impostos;
 
-  const custoMercadorias = expenses?.filter(e => e.description.toLowerCase().includes('compra de mercadoria'))
-    .reduce((acc, e) => acc + e.amount, 0) || 0;
+  const custoMercadorias = expenseList.filter(e => e.description.toLowerCase().includes('compra de mercadoria'))
+    .reduce((acc, e) => acc + e.amount, 0);
   
   const lucroBruto = receitaLiquida - custoMercadorias;
 
-  const salarios = employees?.reduce((acc, emp) => acc + emp.salary + (emp.transportAllowance || 0) + (emp.foodAllowance || 0), 0) || 0;
-  const outrasDespesasOperacionais = (expenses?.reduce((acc, e) => acc + e.amount, 0) || 0) - custoMercadorias - salarios;
+  const salarios = employeeList.reduce((acc, emp) => acc + emp.salary + (emp.transportAllowance || 0) + (emp.foodAllowance || 0), 0);
+  const outrasDespesasOperacionais = expenseList.reduce((acc, e) => acc + e.amount, 0) - custoMercadorias - salarios;
   const despesasOperacionais = salarios + outrasDespesasOperacionais;
 
   const lucroOperacional = lucroBruto - despesasOperacionais;

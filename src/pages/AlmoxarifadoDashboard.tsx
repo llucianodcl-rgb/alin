@@ -315,7 +315,7 @@ export default function AlmoxarifadoDashboard() {
         <Card className="p-5 border-l-4 border-l-emerald-500">
           <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Valor Estoque</p>
           <h3 className="text-2xl font-bold text-slate-800">
-            {new Intl.NumberFormat('pt-BR', { style: 'currency', notation: 'compact', compactDisplay: 'short' }).format(totalValue)}
+            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', notation: 'compact', compactDisplay: 'short' }).format(totalValue)}
           </h3>
         </Card>
 

@@ -31,7 +31,7 @@ export function AuditList() {
     );
   }
 
-  const filteredLogs = logs.filter(log => {
+  const filteredLogs = (logs || []).filter(log => {
     const matchesSearch = 
       log.userName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       log.targetName?.toLowerCase().includes(searchTerm.toLowerCase()) ||

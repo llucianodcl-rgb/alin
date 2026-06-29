@@ -49,13 +49,13 @@ export default function FinanceDashboard() {
   const expenseCategories = useLiveQuery(() => db.expenseCategories.toArray(), []) || [];
 
   // Basic calculations (in real-world, we filter by month/year)
-  const totalRevenue = revenues?.filter(r => r.status === 'RECEIVED').reduce((acc, r) => acc + r.amount, 0) || 0;
-  const totalExpenses = expenses?.filter(e => e.status === 'PAID').reduce((acc, e) => acc + e.amount, 0) || 0;
+  const totalRevenue = (revenues || []).filter(r => r.status === 'RECEIVED').reduce((acc, r) => acc + r.amount, 0);
+  const totalExpenses = (expenses || []).filter(e => e.status === 'PAID').reduce((acc, e) => acc + e.amount, 0);
   
-  const pendingExpenses = expenses?.filter(e => e.status === 'PENDING').reduce((acc, e) => acc + e.amount, 0) || 0;
-  const overdueExpenses = expenses?.filter(e => e.status === 'OVERDUE').reduce((acc, e) => acc + e.amount, 0) || 0;
+  const pendingExpenses = (expenses || []).filter(e => e.status === 'PENDING').reduce((acc, e) => acc + e.amount, 0);
+  const overdueExpenses = (expenses || []).filter(e => e.status === 'OVERDUE').reduce((acc, e) => acc + e.amount, 0);
   
-  const salarySum = employees?.reduce((acc, emp) => acc + emp.salary + (emp.transportAllowance || 0) + (emp.foodAllowance || 0), 0) || 0;
+  const salarySum = (employees || []).reduce((acc, emp) => acc + emp.salary + (emp.transportAllowance || 0) + (emp.foodAllowance || 0), 0);
 
   const grossProfit = totalRevenue - totalExpenses;
   const netProfit = grossProfit - salarySum; // simplified

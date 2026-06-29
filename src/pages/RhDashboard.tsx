@@ -37,16 +37,17 @@ export default function RhDashboard() {
   const handlePrevMonth = () => setSelectedMonth(prev => prev === 0 ? 11 : prev - 1);
   const handleNextMonth = () => setSelectedMonth(prev => prev === 11 ? 0 : prev + 1);
 
-  const totalEmployees = employees?.length || 0;
-  const activeEmployees = employees?.filter(e => e.status === 'ACTIVE').length || 0;
-  const onLeave = employees?.filter(e => e.status === 'LEAVE' || e.status === 'VACATION').length || 0;
+  const employeeList = employees || [];
+  const totalEmployees = employeeList.length;
+  const activeEmployees = employeeList.filter(e => e.status === 'ACTIVE').length;
+  const onLeave = employeeList.filter(e => e.status === 'LEAVE' || e.status === 'VACATION').length;
   
-  const totalPayroll = employees?.filter(e => e.status === 'ACTIVE').reduce((sum, emp) => {
+  const totalPayroll = employeeList.filter(e => e.status === 'ACTIVE').reduce((sum, emp) => {
     return sum + (emp.salary || 0) + (emp.transportAllowance || 0) + (emp.foodAllowance || 0);
-  }, 0) || 0;
+  }, 0);
 
   // Filter list based on search
-  const filteredEmployees = employees?.filter(e => 
+  const filteredEmployees = employeeList.filter(e => 
     matchText(e.name, searchQuery) ||
     matchText(e.role, searchQuery) ||
     matchText(e.department, searchQuery) ||
@@ -55,7 +56,7 @@ export default function RhDashboard() {
     matchText(e.phone, searchQuery) ||
     matchText(e.status, searchQuery) ||
     matchText(e.notes, searchQuery)
-  ) || [];
+  );
 
   const hasSearchResults = filteredEmployees.length > 0;
 
@@ -187,7 +188,7 @@ export default function RhDashboard() {
               {activeEmployees === 0 ? (
                 <p className="text-slate-500 text-sm">Nenhum colaborador ativo encontrado.</p>
               ) : (
-                employees?.filter(e => e.status === 'ACTIVE').slice(0, 5).map(emp => (
+                employeeList.filter(e => e.status === 'ACTIVE').slice(0, 5).map(emp => (
                   <div key={emp.id} className="flex items-center justify-between border-b border-slate-100 pb-3 last:border-0 last:pb-0">
                     <div>
                       <p className="font-medium text-slate-800 text-sm">{emp.name}</p>
@@ -234,7 +235,7 @@ export default function RhDashboard() {
             </div>
             <div className="space-y-4">
               {(() => {
-                const birthdays = employees?.filter(e => {
+                const birthdays = employeeList.filter(e => {
                   if (!e.birthDate) return false;
                   const birthMonth = new Date(e.birthDate).getUTCMonth();
                   return birthMonth === selectedMonth;
