@@ -1,4 +1,4 @@
-import { useLiveQuery } from 'dexie-react-hooks';
+import { useStats } from '../hooks/useStats';
 import { db } from '../db/db';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { ExecutivePanel } from '../components/layout/ExecutivePanel';
@@ -23,15 +23,16 @@ const mockChartData = [
 ];
 
 export default function Dashboard() {
-  const products = useLiveQuery(() => db.products.toArray());
-  const events = useLiveQuery(() => db.stockEvents.toArray());
+  const { stats, loading } = useStats();
 
-  const totalProducts = products?.length || 0;
-  const outOfStock = products?.filter(p => p.currentStock <= 0).length || 0;
-  const belowMin = products?.filter(p => p.currentStock > 0 && p.currentStock <= p.minQuantity).length || 0;
-  
-  // Fake calculation for missing data
-  const totalValue = products?.reduce((acc, p) => acc + ((p.unitCost || 0) * p.currentStock), 0) || 0;
+  if (loading) {
+    return <div className="flex items-center justify-center h-full">Carregando métricas...</div>;
+  }
+
+  const totalProducts = stats?.totalProducts || 0;
+  const outOfStock = stats?.lowStockProducts || 0; // Using lowStock as approximation if specific field not updated yet
+  const belowMin = stats?.lowStockProducts || 0;
+  const totalValue = stats?.totalStockValue || 0;
 
   return (
     <div className="space-y-8 max-w-7xl mx-auto pb-12">

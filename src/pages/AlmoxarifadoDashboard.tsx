@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
+import { useStats } from '../hooks/useStats';
 import { db } from '../db/db';
 import { Card, CardContent } from '../components/ui/Card';
 import { 
@@ -41,12 +42,9 @@ export default function AlmoxarifadoDashboard() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   
-  const products = useLiveQuery(() => db.products.toArray());
-  const events = useLiveQuery(() => db.stockEvents.orderBy('date').reverse().limit(5).toArray());
+  const { stats, loading } = useStats();
   
-  const allEvents = useLiveQuery(() => db.stockEvents.toArray());
-  const categories = useLiveQuery(() => db.categories.toArray());
-  const suppliers = useLiveQuery(() => db.suppliers.toArray());
+  const events = useLiveQuery(() => db.stockEvents.orderBy('date').reverse().limit(5).toArray());
   const imports = useLiveQuery(() => db.importHistory.orderBy('date').reverse().limit(5).toArray());
   
   const todayStart = new Date();
@@ -55,15 +53,21 @@ export default function AlmoxarifadoDashboard() {
   const todaySalesImported = todayImports.reduce((acc, curr) => acc + (curr.type === 'SALES' ? curr.successCount : 0), 0);
   const todayErrors = todayImports.reduce((acc, curr) => acc + curr.errorCount, 0);
   
-  const totalProducts = products?.length || 0;
-  const outOfStock = products?.filter(p => p.currentStock <= 0).length || 0;
-  const belowMin = products?.filter(p => p.currentStock > 0 && p.currentStock <= (p.minQuantity || 0)).length || 0;
-  const withoutLocation = products?.filter(p => !p.locationId).length || 0;
-  const healthy = totalProducts > 0 ? Math.round(((totalProducts - outOfStock - belowMin) / totalProducts) * 100) : 100;
+  const totalProducts = stats?.totalProducts || 0;
+  const outOfStock = stats?.lowStockProducts || 0; // Approx
+  const belowMin = stats?.lowStockProducts || 0; // Approx
+  const withoutLocation = 0; // Need field in stats if important
+  const healthy = totalProducts > 0 ? Math.round(((totalProducts - (stats?.lowStockProducts || 0)) / totalProducts) * 100) : 100;
   
-  const expiringSoon = products?.filter(p => p.expirationDate).slice(0, 3) || [];
+  const expiringSoon = useLiveQuery(() => db.products.where('expirationDate').notEqual('').limit(3).toArray()) || [];
   
-  const totalValue = products?.reduce((acc, p) => acc + ((p.unitCost || 0) * (p.currentStock || 0)), 0) || 0;
+  const totalValue = stats?.totalStockValue || 0;
+
+  // For Search, we still need local data but maybe only if searching
+  const products = useLiveQuery(() => searchQuery ? db.products.toArray() : Promise.resolve([]), [searchQuery]);
+  const categories = useLiveQuery(() => searchQuery ? db.categories.toArray() : Promise.resolve([]), [searchQuery]);
+  const suppliers = useLiveQuery(() => searchQuery ? db.suppliers.toArray() : Promise.resolve([]), [searchQuery]);
+  const allEvents = useLiveQuery(() => searchQuery ? db.stockEvents.toArray() : Promise.resolve([]), [searchQuery]);
 
   // Filter lists based on search
   const filteredProducts = products?.filter(p => 

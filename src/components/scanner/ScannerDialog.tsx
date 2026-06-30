@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { SmartScanner } from './SmartScanner';
+import { scanLogRepository, productRepository } from '../../db/repository';
 import { db } from '../../db/db';
 import { Product } from '../../types';
 import { useNavigate } from 'react-router-dom';
@@ -44,26 +45,27 @@ export function ScannerDialog({ isOpen, onClose, onSelect, mode = 'GENERAL' }: S
     setScannedCode(code);
     
     // 1. Check internal DB
-    const internalProduct = await db.products.where('barcode').equals(code).or('internalCode').equals(code).first();
+    const internalProduct = await productRepository.list({ barcode: code });
+    const product = internalProduct[0] || (await productRepository.list({ internalCode: code }))[0];
     
     // Log the scan
     if (profile) {
-      await db.scanLogs.add({
+      await scanLogRepository.add({
         userId: profile.id,
         userName: profile.name,
         timestamp: new Date().toISOString(),
         code,
         format,
-        type: internalProduct ? 'PRODUCT' : 'OTHER',
-        targetId: internalProduct?.id,
-        targetName: internalProduct?.name,
+        type: product ? 'PRODUCT' : 'OTHER',
+        targetId: product?.id,
+        targetName: product?.name,
         operation: mode,
         device: navigator.userAgent
-      });
+      } as any);
     }
 
-    if (internalProduct) {
-      setFoundProduct(internalProduct);
+    if (product) {
+      setFoundProduct(product);
       setStep('RESULT');
     } else {
       // 2. Search Public DB (Simulated)

@@ -76,7 +76,7 @@ export function ExecutivePanel() {
           
           <div className="text-lg text-slate-700 leading-relaxed max-w-4xl font-medium">
             {summary.split('. ').map((sentence, i) => (
-              <span key={i} className="block mb-2">{sentence}{sentence && !sentence.endsWith('.') ? '.' : ''}</span>
+              <span key={`${i}-${sentence.substring(0, 20)}`} className="block mb-2">{sentence}{sentence && !sentence.endsWith('.') ? '.' : ''}</span>
             ))}
           </div>
         </CardContent>

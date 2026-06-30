@@ -14,14 +14,14 @@ export default function CashFlow() {
   
   const transactions = [
     ...(expenses?.map(e => ({
-      id: e.id,
+      id: `expense-${e.id}`,
       description: e.description,
       amount: -e.amount, // Negative for expenses
       date: e.paymentDate || e.dueDate,
       type: 'EXPENSE'
     })) || []),
     ...(revenues?.map(r => ({
-      id: r.id,
+      id: `revenue-${r.id}`,
       description: r.description,
       amount: r.amount,
       date: r.date,

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, generateId } from '../db/db';
+import { productRepository, stockEventRepository, revenueRepository } from '../db/repository';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Label } from '../components/ui/Label';
@@ -82,60 +83,64 @@ export default function ExitForm() {
           const eventIds: string[] = [];
           const oldStockStates: { id: string, stock: number }[] = [];
 
-          await db.transaction('rw', db.products, db.stockEvents, async () => {
-            for (const item of items) {
-              const product = await db.products.get(item.productId);
-              if (product) {
-                // Check if enough stock
-                if (product.currentStock < item.quantity) {
-                  throw new Error(`Estoque insuficiente para o produto: ${product.name}`);
-                }
-                
-                // Store old state
-                oldStockStates.push({ id: product.id!, stock: product.currentStock });
+          for (const item of items) {
+            const product = await productRepository.get(item.productId);
+            if (product) {
+              // Check if enough stock
+              if (product.currentStock < item.quantity) {
+                throw new Error(`Estoque insuficiente para o produto: ${product.name}`);
+              }
+              
+              // Store old state
+              oldStockStates.push({ id: product.id, stock: product.currentStock });
 
-                // Update product stock
-                const newStock = product.currentStock - item.quantity;
-                await db.products.update(product.id!, { currentStock: newStock });
+              // Update product stock
+              const newStock = product.currentStock - item.quantity;
+              await productRepository.update(product.id, { currentStock: newStock } as any, {
+                totalStockValue: -item.quantity * (product.unitCost || 0)
+              });
 
-                // Create stock event
-                const eventId = generateId();
-                eventIds.push(eventId);
-                await db.stockEvents.add({
-                  id: eventId,
-                  productId: item.productId,
-                  type: 'SAIDA',
-                  quantity: item.quantity,
-                  date,
-                  reason,
-                  notes
+              // Create stock event
+              const eventId = await stockEventRepository.add({
+                productId: item.productId,
+                type: 'SAIDA',
+                quantity: item.quantity,
+                date,
+                reason,
+                notes
+              } as any);
+              eventIds.push(eventId);
+
+              // Generate Revenue if reason is Venda
+              const salePrice = typeof item.salePrice === 'string' ? parseCurrency(item.salePrice) : item.salePrice;
+              if (reason === 'Venda' && (salePrice || 0) > 0) {
+                const totalRevenue = (salePrice || 0) * item.quantity;
+                await revenueRepository.add({
+                  description: `Venda - ${product.name} (Qtd: ${item.quantity})`,
+                  amount: totalRevenue,
+                  date: date,
+                  source: 'SALE',
+                  referenceId: eventId,
+                  status: 'RECEIVED'
+                } as any, {
+                  monthlyRevenue: totalRevenue,
+                  monthlyProfit: totalRevenue - ((product.unitCost || 0) * item.quantity)
                 });
-
-                // Generate Revenue if reason is Venda
-                const salePrice = typeof item.salePrice === 'string' ? parseCurrency(item.salePrice) : item.salePrice;
-                if (reason === 'Venda' && (salePrice || 0) > 0) {
-                  await db.revenues.add({
-                    id: generateId(),
-                    description: `Venda - ${product.name} (Qtd: ${item.quantity})`,
-                    amount: (salePrice || 0) * item.quantity,
-                    date: date,
-                    source: 'SALE',
-                    referenceId: eventId,
-                    status: 'RECEIVED',
-                    createdAt: new Date().toISOString()
-                  });
-                }
               }
             }
-          });
+          }
 
           showUndo({
             message: 'Saída registrada com sucesso.',
             onUndo: async () => {
-              await db.transaction('rw', db.products, db.stockEvents, async () => {
-                for (const eid of eventIds) await db.stockEvents.delete(eid);
-                for (const state of oldStockStates) await db.products.update(state.id, { currentStock: state.stock });
-              });
+              // Delete events
+              for (const eid of eventIds) {
+                await stockEventRepository.delete(eid);
+              }
+              // Restore stock states
+              for (const state of oldStockStates) {
+                await productRepository.update(state.id, { currentStock: state.stock } as any);
+              }
             }
           });
           navigate('/almoxarifado', { replace: true });

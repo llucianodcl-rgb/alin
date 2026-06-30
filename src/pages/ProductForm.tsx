@@ -3,7 +3,8 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { db, generateId } from '../db/db';
+import { db } from '../db/db';
+import { productRepository, stockEventRepository } from '../db/repository';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
@@ -121,7 +122,7 @@ export default function ProductForm() {
               ...productData,
               locationPath: productData.locationId ? getLocationPath(productData.locationId) : undefined
             };
-            await db.products.update(id, updatedData);
+            await productRepository.update(id, updatedData as any);
             
             if (profile) {
               await auditService.log({
@@ -142,32 +143,32 @@ export default function ProductForm() {
             showUndo({
               message: 'Produto atualizado com sucesso.',
               onUndo: async () => {
-                await db.products.update(id, previousData);
+                await productRepository.update(id, previousData as any);
               }
             });
           } else {
-            const newProductId = generateId();
-            const productToSave = {
-              id: newProductId,
+            const updatedData = {
               ...productData,
               locationPath: productData.locationId ? getLocationPath(productData.locationId) : undefined,
               currentStock: initialQuantity || 0
             };
-            await db.products.add(productToSave as any);
+
+            const newProductId = await productRepository.add(updatedData as any, {
+              totalProducts: 1,
+              totalStockValue: (initialQuantity || 0) * (data.unitCost || 0)
+            });
 
             let eventId: string | null = null;
             // Add initial stock event if quantity > 0
             if (initialQuantity && initialQuantity > 0) {
-              eventId = generateId();
-              await db.stockEvents.add({
-                id: eventId,
+              eventId = await stockEventRepository.add({
                 productId: newProductId,
                 type: 'ENTRADA',
                 quantity: initialQuantity,
                 date: new Date().toISOString(),
                 notes: 'Estoque inicial (Cadastro)',
                 unitCost: data.unitCost
-              });
+              } as any);
             }
             
             if (profile) {
@@ -178,7 +179,7 @@ export default function ProductForm() {
                 action: 'CREATE',
                 targetId: newProductId,
                 targetName: productData.name,
-                newValue: productToSave,
+                newValue: updatedData,
                 quantityChanged: initialQuantity || 0,
                 details: 'Produto cadastrado.'
               });
@@ -187,8 +188,11 @@ export default function ProductForm() {
             showUndo({
               message: 'Produto cadastrado com sucesso.',
               onUndo: async () => {
-                await db.products.delete(newProductId);
-                if (eventId) await db.stockEvents.delete(eventId);
+                await productRepository.delete(newProductId, {
+                  totalProducts: -1,
+                  totalStockValue: -(initialQuantity || 0) * (data.unitCost || 0)
+                });
+                if (eventId) await stockEventRepository.delete(eventId);
               }
             });
           }

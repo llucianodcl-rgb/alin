@@ -30,6 +30,7 @@ interface NotificationContextType {
   confirm: (options: ConfirmOptions) => void;
   showUndo: (options: UndoOptions) => void;
   showUnsavedChanges: (options: UnsavedChangesOptions) => void;
+  showNotification: (message: string, type?: 'success' | 'error' | 'info' | 'warning') => void;
 }
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
@@ -38,7 +39,9 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const [confirmOptions, setConfirmOptions] = useState<ConfirmOptions | null>(null);
   const [unsavedOptions, setUnsavedOptions] = useState<UnsavedChangesOptions | null>(null);
   const [undoOptions, setUndoOptions] = useState<UndoOptions | null>(null);
+  const [notification, setNotification] = useState<{ message: string, type: string } | null>(null);
   const undoTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const notificationTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const confirm = useCallback((options: ConfirmOptions) => {
     setConfirmOptions(options);
@@ -46,6 +49,14 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
   const showUnsavedChanges = useCallback((options: UnsavedChangesOptions) => {
     setUnsavedOptions(options);
+  }, []);
+
+  const showNotification = useCallback((message: string, type: 'success' | 'error' | 'info' | 'warning' = 'info') => {
+    if (notificationTimerRef.current) clearTimeout(notificationTimerRef.current);
+    setNotification({ message, type });
+    notificationTimerRef.current = setTimeout(() => {
+      setNotification(null);
+    }, 4000);
   }, []);
 
   const showUndo = useCallback((options: UndoOptions) => {
@@ -81,8 +92,44 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   };
 
   return (
-    <NotificationContext.Provider value={{ confirm, showUndo, showUnsavedChanges }}>
+    <NotificationContext.Provider value={{ confirm, showUndo, showUnsavedChanges, showNotification }}>
       {children}
+
+      {/* Standard Notification SnackBar */}
+      <AnimatePresence>
+        {notification && (
+          <div className="fixed top-24 right-8 z-[110] w-full max-w-sm px-4">
+            <motion.div
+              initial={{ opacity: 0, x: 50, scale: 0.9 }}
+              animate={{ opacity: 1, x: 0, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9, x: 20 }}
+              className={`rounded-2xl shadow-2xl p-4 flex items-center gap-4 border ${
+                notification.type === 'success' ? 'bg-emerald-50 border-emerald-100 text-emerald-800' :
+                notification.type === 'error' ? 'bg-red-50 border-red-100 text-red-800' :
+                'bg-white border-slate-100 text-slate-800'
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
+                  notification.type === 'success' ? 'bg-emerald-500/20 text-emerald-600' :
+                  notification.type === 'error' ? 'bg-red-500/20 text-red-600' :
+                  'bg-blue-500/20 text-blue-600'
+                }`}>
+                  {notification.type === 'success' ? <CheckCircle2 className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}
+                </div>
+                <p className="text-sm font-medium">{notification.message}</p>
+              </div>
+              
+              <button
+                onClick={() => setNotification(null)}
+                className="p-1 hover:bg-black/5 rounded-lg transition-colors ml-auto"
+              >
+                <X className="w-4 h-4 opacity-50" />
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Confirmation Modal */}
       <AnimatePresence>

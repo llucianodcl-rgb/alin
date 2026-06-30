@@ -1,4 +1,14 @@
 import { useState, useEffect } from 'react';
+import { 
+  productRepository, 
+  expenseRepository, 
+  revenueRepository, 
+  employeeRepository,
+  inventoryRepository,
+  locationRepository,
+  stockEventRepository,
+  auditRepository,
+} from '../db/repository';
 import { db, generateId } from '../db/db';
 import { Insight, InsightSeverity, InsightCategory } from '../types';
 
@@ -25,13 +35,13 @@ export function useExecutiveInsights() {
       const lastMonth = lastMonthDate.toISOString().substring(0, 7);
 
       const [products, expenses, revenues, employees] = await Promise.all([
-        db.products.toArray(),
-        db.expenses.toArray(),
-        db.revenues.toArray(),
-        db.employees.where('status').equals('ACTIVE').toArray()
+        productRepository.list(),
+        expenseRepository.list(),
+        revenueRepository.list(),
+        employeeRepository.list({ status: 'ACTIVE' })
       ]);
 
-      const newInsights: Omit<Insight, 'id' | 'date' | 'isRead'>[] = [];
+      const newInsights: any[] = [];
 
       // 1. Finance Calculations
       const currentMonthRevenues = revenues.filter(r => r.date.startsWith(currentMonth));
@@ -180,8 +190,8 @@ export function useExecutiveInsights() {
       }
 
       // 6. Smart Warehouse Insights
-      const locations = await db.locations.toArray();
-      const stockEvents = await db.stockEvents.toArray();
+      const locations = await locationRepository.list();
+      const stockEvents = await stockEventRepository.list();
       
       const emptyLocations = locations.filter(loc => {
         const hasChildren = locations.some(l => l.parentId === loc.id);
@@ -242,7 +252,7 @@ export function useExecutiveInsights() {
           severity: 'IMPORTANT',
           title: 'Atividade Incomum',
           message: `Foram detectadas ${deleteCount} exclusões de registros no sistema nos últimos 7 dias. Verifique o módulo de Auditoria.`
-        } as unknown as Insight); // Assuming 'SYSTEM' might not be in the strict category type, cast as Insight
+        } as any); 
       }
 
       // Health Calculation
@@ -278,14 +288,17 @@ export function useExecutiveInsights() {
       setSummary(summaryText);
 
       // Save insights to DB if they don't exist for today
-      // For simplicity in this demo, we'll just clear old unread ones or append, but to avoid spamming we can delete today's and insert fresh
       await db.insights.where('date').equals(today).delete();
       
+      const now = new Date().toISOString();
       const insightsToInsert: Insight[] = newInsights.map(i => ({
         ...i,
         id: generateId(),
         date: today,
-        isRead: false
+        isRead: false,
+        createdAt: now,
+        updatedAt: now,
+        syncStatus: 'PENDING'
       }));
 
       if (insightsToInsert.length > 0) {
@@ -295,8 +308,8 @@ export function useExecutiveInsights() {
       // Load all from today
       const todaysInsights = await db.insights.where('date').equals(today).toArray();
       // Sort by severity: CRITICAL > IMPORTANT > WARNING > INFO
-      const severityWeight = { 'CRITICAL': 4, 'IMPORTANT': 3, 'WARNING': 2, 'INFO': 1 };
-      todaysInsights.sort((a, b) => severityWeight[b.severity] - severityWeight[a.severity]);
+      const severityWeight: Record<string, number> = { 'CRITICAL': 4, 'IMPORTANT': 3, 'WARNING': 2, 'INFO': 1 };
+      todaysInsights.sort((a, b) => (severityWeight[b.severity] || 0) - (severityWeight[a.severity] || 0));
       
       setInsights(todaysInsights);
     } catch (error) {

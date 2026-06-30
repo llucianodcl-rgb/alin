@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, generateId } from '../db/db';
+import { productRepository, stockEventRepository, expenseRepository } from '../db/repository';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Label } from '../components/ui/Label';
@@ -97,98 +98,94 @@ export default function EntryForm() {
           const eventIds: string[] = [];
           const oldStockStates: { id: string, stock: number, cost?: number, batch?: string, exp?: string }[] = [];
 
-          await db.transaction('rw', db.products, db.stockEvents, async () => {
-            for (const item of items) {
-              const product = await db.products.get(item.productId);
-              if (product) {
-                // Store old state for undo
-                oldStockStates.push({
-                  id: product.id!,
-                  stock: product.currentStock,
-                  cost: product.unitCost,
-                  batch: product.batch,
-                  exp: product.expirationDate
-                });
+          for (const item of items) {
+            const product = await productRepository.get(item.productId);
+            if (product) {
+              // Store old state for undo
+              oldStockStates.push({
+                id: product.id,
+                stock: product.currentStock,
+                cost: product.unitCost,
+                batch: product.batch,
+                exp: product.expirationDate
+              });
 
-                // Update product stock
-                const newStock = (product.currentStock || 0) + item.quantity;
-                const unitCost = typeof item.unitCost === 'string' ? parseCurrency(item.unitCost) : item.unitCost;
-                
-                await db.products.update(product.id!, { 
-                  currentStock: newStock,
-                  unitCost: unitCost > 0 ? unitCost : product.unitCost,
-                  batch: item.batch || product.batch,
-                  expirationDate: item.expirationDate || product.expirationDate
-                });
+              // Update product stock
+              const newStock = (product.currentStock || 0) + item.quantity;
+              const unitCost = typeof item.unitCost === 'string' ? parseCurrency(item.unitCost) : item.unitCost;
+              
+              await productRepository.update(product.id, { 
+                currentStock: newStock,
+                unitCost: unitCost > 0 ? unitCost : product.unitCost,
+                batch: item.batch || product.batch,
+                expirationDate: item.expirationDate || product.expirationDate
+              } as any, {
+                totalStockValue: item.quantity * (unitCost > 0 ? unitCost : (product.unitCost || 0))
+              });
 
-                // Create stock event
-                const eventId = generateId();
-                eventIds.push(eventId);
-                await db.stockEvents.add({
-                  id: eventId,
-                  productId: item.productId,
-                  type: 'ENTRADA',
-                  quantity: item.quantity,
-                  date,
-                  supplierId,
-                  invoiceNumber,
-                  unitCost: unitCost,
-                  batch: item.batch,
-                  expirationDate: item.expirationDate,
-                  notes
-                });
+              // Create stock event
+              const eventId = await stockEventRepository.add({
+                productId: item.productId,
+                type: 'ENTRADA',
+                quantity: item.quantity,
+                date,
+                supplierId,
+                invoiceNumber,
+                unitCost: unitCost,
+                batch: item.batch,
+                expirationDate: item.expirationDate,
+                notes
+              } as any);
+              eventIds.push(eventId);
 
-                // Generate Expense if cost > 0
-                if (unitCost > 0) {
-                  const totalCost = unitCost * item.quantity;
-                  await db.expenses.add({
-                    id: generateId(),
-                    description: `Compra de Mercadoria - ${product.name} (Qtd: ${item.quantity})`,
-                    amount: totalCost,
-                    dueDate: date, // By default due today, user can edit in financial module
-                    supplierId: supplierId || undefined,
-                    status: 'PENDING',
-                    isRecurring: false,
-                    recurrencePeriod: 'NONE',
-                    referenceId: eventId,
-                    createdAt: new Date().toISOString()
-                  });
-                }
-                
-                if (profile) {
-                  await auditService.log({
-                    userId: profile.uid,
-                    userName: profile.displayName || profile.email || 'Usuário',
-                    module: 'ALMOXARIFADO',
-                    action: 'CREATE',
-                    targetId: eventId,
-                    targetName: `Entrada: ${product.name}`,
-                    quantityChanged: item.quantity,
-                    details: `Qtd: ${item.quantity}`
-                  });
-                }
+              // Generate Expense if cost > 0
+              if (unitCost > 0) {
+                const totalCost = unitCost * item.quantity;
+                await expenseRepository.add({
+                  description: `Compra de Mercadoria - ${product.name} (Qtd: ${item.quantity})`,
+                  amount: totalCost,
+                  dueDate: date, // By default due today, user can edit in financial module
+                  supplierId: supplierId || undefined,
+                  status: 'PENDING',
+                  isRecurring: false,
+                  recurrencePeriod: 'NONE',
+                  referenceId: eventId
+                } as any, {
+                  monthlyExpenses: totalCost
+                });
+              }
+              
+              if (profile) {
+                await auditService.log({
+                  userId: profile.uid,
+                  userName: profile.displayName || profile.email || 'Usuário',
+                  module: 'ALMOXARIFADO',
+                  action: 'CREATE',
+                  targetId: eventId,
+                  targetName: `Entrada: ${product.name}`,
+                  quantityChanged: item.quantity,
+                  details: `Qtd: ${item.quantity}`
+                });
               }
             }
-          });
+          }
 
           showUndo({
             message: 'Entrada registrada com sucesso.',
             onUndo: async () => {
-              await db.transaction('rw', db.products, db.stockEvents, async () => {
-                // Delete events
-                for (const eid of eventIds) {
-                  await db.stockEvents.delete(eid);
-                }
-                // Restore stock states
-                for (const state of oldStockStates) {
-                  await db.products.update(state.id, {
-                    currentStock: state.stock,
-                    unitCost: state.cost,
-                    batch: state.batch,
-                    expirationDate: state.exp
-                  });
-                }
-              });
+              // Delete events
+              for (const eid of eventIds) {
+                await stockEventRepository.delete(eid);
+              }
+              // Restore stock states
+              for (const state of oldStockStates) {
+                await productRepository.update(state.id, {
+                  currentStock: state.stock,
+                  unitCost: state.cost,
+                  batch: state.batch,
+                  expirationDate: state.exp
+                } as any);
+              }
             }
           });
           navigate('/almoxarifado', { replace: true });

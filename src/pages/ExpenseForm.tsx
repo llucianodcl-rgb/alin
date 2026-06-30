@@ -3,7 +3,8 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { db, generateId } from '../db/db';
+import { db } from '../db/db';
+import { expenseRepository } from '../db/repository';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Label } from '../components/ui/Label';
@@ -57,7 +58,7 @@ export default function ExpenseForm() {
 
   useEffect(() => {
     if (isEditing && id) {
-      db.expenses.get(id).then(exp => {
+      expenseRepository.get(id).then(exp => {
         if (exp) {
           setOldData(exp);
           reset(exp as any);
@@ -75,27 +76,25 @@ export default function ExpenseForm() {
         try {
           if (isEditing && id) {
             const previousData = { ...oldData! };
-            await db.expenses.update(id, data as any);
+            await expenseRepository.update(id, data as any);
             
             showUndo({
               message: 'Despesa atualizada.',
               onUndo: async () => {
-                await db.expenses.update(id, previousData);
+                await expenseRepository.update(id, previousData as any);
               }
             });
           } else {
-            const newId = generateId();
-            const newExp = {
-              id: newId,
-              ...data,
-              createdAt: new Date().toISOString()
-            };
-            await db.expenses.add(newExp as any);
+            const newId = await expenseRepository.add(data as any, {
+              monthlyExpenses: data.amount
+            });
             
             showUndo({
               message: 'Despesa cadastrada.',
               onUndo: async () => {
-                await db.expenses.delete(newId);
+                await expenseRepository.delete(newId, {
+                  monthlyExpenses: -data.amount
+                });
               }
             });
           }

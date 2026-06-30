@@ -8,6 +8,7 @@ import { Card } from '../../components/ui/Card';
 export default function ImportHistory() {
   const navigate = useNavigate();
   const history = useLiveQuery(() => db.importHistory.orderBy('date').reverse().toArray(), []) || [];
+  const registers = useLiveQuery(() => db.cashRegisters.toArray(), []) || [];
   const [searchTerm, setSearchTerm] = useState('');
 
   const filteredHistory = history.filter(h => 
@@ -21,6 +22,11 @@ export default function ImportHistory() {
       case 'FAILED': return <span className="flex items-center gap-1 text-red-600 bg-red-50 px-2 py-1 rounded-md text-xs font-bold"><XCircle className="w-3 h-3" /> Falhou</span>;
       default: return status;
     }
+  };
+
+  const getRegisterName = (id?: string) => {
+    if (!id) return '-';
+    return registers.find(r => r.id === id)?.name || 'Caixa Removido';
   };
 
   return (
@@ -60,6 +66,7 @@ export default function ImportHistory() {
               <tr>
                 <th className="px-6 py-4 font-semibold">Data/Hora</th>
                 <th className="px-6 py-4 font-semibold">Arquivo</th>
+                <th className="px-6 py-4 font-semibold">Caixa</th>
                 <th className="px-6 py-4 font-semibold">Tipo</th>
                 <th className="px-6 py-4 font-semibold text-center">Registros</th>
                 <th className="px-6 py-4 font-semibold text-center">Sucesso/Erros</th>
@@ -70,7 +77,7 @@ export default function ImportHistory() {
             <tbody className="divide-y divide-slate-100 bg-white">
               {filteredHistory.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center text-slate-500">
+                  <td colSpan={8} className="px-6 py-12 text-center text-slate-500">
                     Nenhuma importação encontrada.
                   </td>
                 </tr>
@@ -83,6 +90,9 @@ export default function ImportHistory() {
                     <td className="px-6 py-4 font-medium text-slate-900 flex items-center gap-2">
                       <FileText className="w-4 h-4 text-slate-400" />
                       {item.fileName}
+                    </td>
+                    <td className="px-6 py-4 text-slate-600 font-medium">
+                      {getRegisterName(item.cashRegisterId)}
                     </td>
                     <td className="px-6 py-4 text-slate-600 font-medium">
                       {item.type === 'SALES' ? 'Vendas' : item.type}

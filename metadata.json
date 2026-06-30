@@ -1,6 +1,6 @@
 {
   "name": "GEIN - Gestão Inteligente",
   "description": "Plataforma integrada de gestão para almoxarifado, financeiro e recursos humanos com foco em eficiência e automação.",
-  "requestFramePermissions": [],
+  "requestFramePermissions": ["camera"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

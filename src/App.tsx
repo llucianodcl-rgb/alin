@@ -10,6 +10,7 @@ import { NotificationProvider } from './contexts/NotificationContext';
 import { NavigationProvider } from './contexts/NavigationContext';
 import { AuthProvider } from './contexts/AuthContext';
 import { AuthGuard } from './components/auth/AuthGuard';
+import { LockGuard } from './components/auth/LockGuard';
 import { AnimatePresence, motion } from 'motion/react';
 import { useIsMobile } from './hooks/useIsMobile';
 import Dashboard from './pages/Dashboard';
@@ -34,8 +35,13 @@ import ExpenseForm from './pages/ExpenseForm';
 import RevenuesList from './pages/RevenuesList';
 import CashFlow from './pages/CashFlow';
 import SimplifiedDre from './pages/SimplifiedDre';
+import CashRegisterClosure from './pages/financeiro/CashRegisterClosure';
+import ReconciliationHistory from './pages/financeiro/ReconciliationHistory';
+import InvestigationHistory from './pages/financeiro/InvestigationHistory';
+import AssistedInvestigation from './pages/financeiro/AssistedInvestigation';
 import InsightsHistory from './pages/InsightsHistory';
 import Admin from './pages/Admin';
+import AdminDiagnostics from './pages/AdminDiagnostics';
 import { InventoryList } from './pages/InventoryList';
 import { InventoryCreate } from './pages/InventoryCreate';
 import { InventoryCount } from './pages/InventoryCount';
@@ -81,6 +87,10 @@ function AnimatedRoutes() {
           <Route path="/financeiro/receitas" element={<RevenuesList />} />
           <Route path="/financeiro/fluxo-caixa" element={<CashFlow />} />
           <Route path="/financeiro/dre" element={<SimplifiedDre />} />
+          <Route path="/financeiro/fechamento" element={<CashRegisterClosure />} />
+          <Route path="/financeiro/conciliacao" element={<ReconciliationHistory />} />
+          <Route path="/financeiro/investigacoes" element={<InvestigationHistory />} />
+          <Route path="/financeiro/investigacoes/:id" element={<AssistedInvestigation />} />
           
           {/* Almoxarifado */}
           <Route path="/almoxarifado" element={<AlmoxarifadoDashboard />} />
@@ -116,6 +126,7 @@ function AnimatedRoutes() {
           {/* Configs */}
           <Route path="/configuracoes" element={<Settings />} />
           <Route path="/auditoria" element={<AuthGuard requireAdmin><AuditList /></AuthGuard>} />
+          <Route path="/diagnostico" element={<AuthGuard requireAdmin><AdminDiagnostics /></AuthGuard>} />
           
           <Route path="/admin" element={<AuthGuard requireAdmin><Admin /></AuthGuard>} />
           <Route path="*" element={<div className="p-8 text-center text-slate-500">Página em desenvolvimento...</div>} />
@@ -164,9 +175,11 @@ export default function App() {
         <Router>
           <NavigationProvider>
             <AuthGuard>
-              <AppLayout>
-                <AnimatedRoutes />
-              </AppLayout>
+              <LockGuard>
+                <AppLayout>
+                  <AnimatedRoutes />
+                </AppLayout>
+              </LockGuard>
             </AuthGuard>
           </NavigationProvider>
         </Router>

@@ -3,7 +3,8 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { db, generateId } from '../db/db';
+import { db } from '../db/db';
+import { employeeRepository } from '../db/repository';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Label } from '../components/ui/Label';
@@ -80,7 +81,7 @@ export default function EmployeeForm() {
 
   useEffect(() => {
     if (isEditing && id) {
-      db.employees.get(id).then(emp => {
+      employeeRepository.get(id).then(emp => {
         if (emp) {
           setOldData(emp);
           reset(emp as any);
@@ -98,27 +99,25 @@ export default function EmployeeForm() {
         try {
           if (isEditing && id) {
             const previousData = { ...oldData! };
-            await db.employees.update(id, data as any);
+            await employeeRepository.update(id, data as any);
             
             showUndo({
               message: 'Funcionário atualizado.',
               onUndo: async () => {
-                await db.employees.update(id, previousData);
+                await employeeRepository.update(id, previousData as any);
               }
             });
           } else {
-            const newId = generateId();
-            const newEmp = {
-              id: newId,
-              ...data,
-              createdAt: new Date().toISOString()
-            };
-            await db.employees.add(newEmp as any);
+            const newId = await employeeRepository.add(data as any, {
+              totalEmployees: 1
+            });
             
             showUndo({
               message: 'Funcionário cadastrado.',
               onUndo: async () => {
-                await db.employees.delete(newId);
+                await employeeRepository.delete(newId, {
+                  totalEmployees: -1
+                });
               }
             });
           }

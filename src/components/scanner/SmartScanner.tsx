@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Html5QrcodeScanner, Html5QrcodeSupportedFormats } from 'html5-qrcode';
-import { X, Camera, Zap, ZapOff, Keyboard, Search, Package, AlertCircle } from 'lucide-react';
+import { BrowserMultiFormatReader, IScannerControls } from '@zxing/browser';
+import { X, Camera, Zap, ZapOff, Keyboard, Search, Package, AlertCircle, RefreshCw } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -15,44 +15,77 @@ interface SmartScannerProps {
 export function SmartScanner({ onScan, onClose, title = 'Scanner Inteligente', isOpen }: SmartScannerProps) {
   const [activeTab, setActiveTab] = useState<'CAMERA' | 'MANUAL'>('CAMERA');
   const [manualCode, setManualCode] = useState('');
-  const scannerRef = useRef<Html5QrcodeScanner | null>(null);
+  const [isScanning, setIsScanning] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const controlsRef = useRef<IScannerControls | null>(null);
 
   useEffect(() => {
     if (isOpen && activeTab === 'CAMERA') {
-      const config = {
-        fps: 10,
-        qrbox: { width: 250, height: 250 },
-        aspectRatio: 1.0,
-        formatsToSupport: [
-          Html5QrcodeSupportedFormats.EAN_13,
-          Html5QrcodeSupportedFormats.EAN_8,
-          Html5QrcodeSupportedFormats.CODE_128,
-          Html5QrcodeSupportedFormats.CODE_39,
-          Html5QrcodeSupportedFormats.UPC_A,
-          Html5QrcodeSupportedFormats.UPC_E,
-          Html5QrcodeSupportedFormats.QR_CODE,
-        ]
-      };
-
-      scannerRef.current = new Html5QrcodeScanner("reader", config, false);
-      
-      scannerRef.current.render(
-        (decodedText, decodedResult) => {
-          // Success
-          handleSuccess(decodedText, decodedResult.result.format?.formatName || 'UNKNOWN');
-        },
-        (error) => {
-          // Silent error for performance
-        }
-      );
+      startScanner();
+    } else {
+      stopScanner();
     }
 
     return () => {
-      if (scannerRef.current) {
-        scannerRef.current.clear().catch(console.error);
-      }
+      stopScanner();
     };
   }, [isOpen, activeTab]);
+
+  const startScanner = async () => {
+    setCameraError(null);
+    setIsScanning(false);
+    
+    if (!videoRef.current) return;
+
+    try {
+      // First, explicitly request camera permissions
+      await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      
+      const codeReader = new BrowserMultiFormatReader();
+      
+      const controls = await codeReader.decodeFromConstraints(
+        {
+          video: {
+            facingMode: 'environment',
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          }
+        },
+        videoRef.current,
+        (result, error) => {
+          if (result) {
+            handleSuccess(result.getText(), result.getBarcodeFormat().toString());
+          }
+        }
+      );
+      
+      controlsRef.current = controls;
+      setIsScanning(true);
+      
+    } catch (err: any) {
+      console.error("Error starting scanner:", err);
+      let message = "Erro ao acessar a câmera.";
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        message = "Permissão da câmera negada. Habilite nas configurações do seu navegador ou dispositivo.";
+      } else if (err.name === 'NotFoundError') {
+        message = "Nenhuma câmera traseira encontrada no dispositivo.";
+      } else if (err.name === 'NotSupportedError') {
+        message = "Este navegador não suporta acesso à câmera.";
+      }
+      setCameraError(message);
+      setIsScanning(false);
+    }
+  };
+
+  const stopScanner = () => {
+    if (controlsRef.current) {
+      controlsRef.current.stop();
+      controlsRef.current = null;
+    }
+    setIsScanning(false);
+  };
 
   // Listen for keyboard (external scanner)
   useEffect(() => {
@@ -65,7 +98,6 @@ export function SmartScanner({ onScan, onClose, title = 'Scanner Inteligente', i
 
       const currentTime = Date.now();
       
-      // If delay between keys is small, it's likely a scanner
       if (currentTime - lastTime > 100) {
         buffer = "";
       }
@@ -87,13 +119,11 @@ export function SmartScanner({ onScan, onClose, title = 'Scanner Inteligente', i
   }, [isOpen, activeTab]);
 
   const handleSuccess = (decodedText: string, format: string) => {
-    // Provide haptic feedback if available
     if (navigator.vibrate) {
       navigator.vibrate(100);
     }
     
-    // Play sound if needed (optional)
-    
+    stopScanner();
     onScan(decodedText, format);
   };
 
@@ -108,7 +138,7 @@ export function SmartScanner({ onScan, onClose, title = 'Scanner Inteligente', i
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
       <motion.div 
         initial={{ opacity: 0, scale: 0.95, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -123,7 +153,7 @@ export function SmartScanner({ onScan, onClose, title = 'Scanner Inteligente', i
             </div>
             <div>
               <h2 className="font-bold text-slate-800">{title}</h2>
-              <p className="text-xs text-slate-500">Aponte para o código ou digite</p>
+              <p className="text-xs text-slate-500">Leitura em tempo real</p>
             </div>
           </div>
           <button 
@@ -160,12 +190,63 @@ export function SmartScanner({ onScan, onClose, title = 'Scanner Inteligente', i
         <div className="flex-1 overflow-y-auto p-6">
           {activeTab === 'CAMERA' ? (
             <div className="space-y-4">
-              <div id="reader" className="overflow-hidden rounded-2xl border-2 border-slate-100 bg-slate-50 min-h-[300px]"></div>
+              <div className="relative aspect-square overflow-hidden rounded-3xl border-2 border-slate-100 bg-slate-900 shadow-inner group">
+                <video 
+                  ref={videoRef}
+                  className="w-full h-full object-cover"
+                  playsInline
+                  muted
+                />
+                
+                {/* Custom Overlay */}
+                {isScanning && (
+                  <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+                    {/* Scanner Frame */}
+                    <div className="relative w-64 h-64 border-2 border-white/30 rounded-3xl overflow-hidden">
+                      {/* Corner Accents */}
+                      <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-blue-500 rounded-tl-xl"></div>
+                      <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-blue-500 rounded-tr-xl"></div>
+                      <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-blue-500 rounded-bl-xl"></div>
+                      <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-blue-500 rounded-br-xl"></div>
+                      
+                      {/* Scanning Line */}
+                      <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-blue-500 to-transparent animate-[scanner_2s_ease-in-out_infinite]"></div>
+                    </div>
+                  </div>
+                )}
+
+                {cameraError && (
+                  <div className="absolute inset-0 bg-slate-900/90 flex flex-col items-center justify-center p-8 text-center">
+                    <div className="w-16 h-16 bg-red-500/20 text-red-500 rounded-full flex items-center justify-center mb-4">
+                      <AlertCircle className="w-8 h-8" />
+                    </div>
+                    <h3 className="text-white font-bold mb-2">Câmera Indisponível</h3>
+                    <p className="text-slate-400 text-xs mb-6 leading-relaxed">
+                      {cameraError}
+                    </p>
+                    <Button 
+                      onClick={startScanner}
+                      className="rounded-xl gap-2"
+                      size="sm"
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                      Tentar Novamente
+                    </Button>
+                  </div>
+                )}
+
+                {!isScanning && !cameraError && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center text-white/50 animate-pulse">
+                    <Camera className="w-12 h-12 mb-2" />
+                    <p className="text-xs font-medium">Iniciando câmera...</p>
+                  </div>
+                )}
+              </div>
               
               <div className="flex items-start gap-3 p-4 bg-blue-50 rounded-2xl border border-blue-100">
                 <Search className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
                 <p className="text-xs text-blue-800 leading-relaxed">
-                  A leitura é automática. Centralize o código na moldura para identificar o produto instantaneamente.
+                  Posicione o código de barras ou QR Code centralizado na moldura azul para leitura automática.
                 </p>
               </div>
             </div>
@@ -206,14 +287,24 @@ export function SmartScanner({ onScan, onClose, title = 'Scanner Inteligente', i
         {/* Footer */}
         <div className="p-6 bg-slate-50 flex items-center justify-between border-t border-slate-100">
            <div className="flex items-center gap-2">
-             <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
-             <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Scanner Ativo</span>
+             <div className={`w-2 h-2 rounded-full ${isScanning ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}`}></div>
+             <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+               {isScanning ? 'Scanner Ativo' : 'Aguardando'}
+             </span>
            </div>
            <Button variant="outline" size="sm" onClick={onClose} className="rounded-xl">
              Fechar
            </Button>
         </div>
       </motion.div>
+
+      <style dangerouslySetInnerHTML={{ __html: `
+        @keyframes scanner {
+          0%, 100% { top: 0; opacity: 0.5; }
+          50% { top: 100%; opacity: 1; }
+        }
+      `}} />
     </div>
   );
 }
+

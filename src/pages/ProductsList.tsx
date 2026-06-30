@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
+import { productRepository } from '../db/repository';
 import { Link } from 'react-router-dom';
-import { Plus, Search, Filter, Package, Trash2 } from 'lucide-react';
+import { Plus, Search, Filter, Package, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Card } from '../components/ui/Card';
@@ -16,14 +17,44 @@ import { auditService } from '../services/AuditService';
 
 export default function ProductsList() {
   const [searchTerm, setSearchTerm] = useListState('searchTerm', '');
+  const [page, setPage] = useState(0);
+  const itemsPerPage = 20;
+
   useScrollPreservation();
   const { confirm, showUndo } = useNotification();
   const { isReadOnly, profile } = useAuth();
   
-  const products = useLiveQuery(
-    () => db.products.toArray(),
-    []
+  const productsCount = useLiveQuery(
+    () => searchTerm 
+      ? db.products
+          .filter(p => 
+            p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+            p.barcode?.includes(searchTerm) ||
+            p.internalCode?.includes(searchTerm)
+          ).count()
+      : db.products.count(),
+    [searchTerm]
   );
+
+  const products = useLiveQuery(
+    async () => {
+      const collection = db.products.orderBy('name');
+      
+      if (searchTerm) {
+        const filtered = collection.filter(p => 
+          p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+          p.barcode?.includes(searchTerm) ||
+          p.internalCode?.includes(searchTerm)
+        );
+        return filtered.offset(page * itemsPerPage).limit(itemsPerPage).toArray();
+      }
+
+      return collection.offset(page * itemsPerPage).limit(itemsPerPage).toArray();
+    },
+    [searchTerm, page]
+  );
+
+  const totalPages = Math.ceil((productsCount || 0) / itemsPerPage);
 
   const handleDelete = (product: Product) => {
     confirm({
@@ -32,9 +63,11 @@ export default function ProductsList() {
       confirmLabel: 'Excluir',
       variant: 'destructive',
       onConfirm: async () => {
-        // Execute deletion
         if (product.id) {
-          await db.products.delete(product.id);
+          await productRepository.delete(product.id, {
+            totalProducts: -1,
+            totalStockValue: -(product.currentStock || 0) * (product.unitCost || 0)
+          });
           
           if (profile) {
             await auditService.log({
@@ -46,27 +79,26 @@ export default function ProductsList() {
               targetName: product.name,
               oldValue: product,
               details: 'Produto excluído.'
-            });
+            } as any);
           }
         }
         
-        // Show undo snackbar
         showUndo({
           message: 'Produto excluído com sucesso.',
           onUndo: async () => {
-            // Restore product
-            await db.products.add(product);
+            await productRepository.add(product as any, {
+              totalProducts: 1,
+              totalStockValue: (product.currentStock || 0) * (product.unitCost || 0)
+            });
           }
         });
       }
     });
   };
 
-  const filteredProducts = products?.filter(p => 
-    p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    p.barcode?.includes(searchTerm) ||
-    p.internalCode?.includes(searchTerm)
-  );
+  useEffect(() => {
+    setPage(0);
+  }, [searchTerm]);
 
   return (
     <div className="space-y-6">
@@ -115,7 +147,7 @@ export default function ProductsList() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filteredProducts?.length === 0 ? (
+              {products?.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-6 py-12 text-center text-slate-500">
                     <div className="flex flex-col items-center justify-center">
@@ -125,7 +157,7 @@ export default function ProductsList() {
                   </td>
                 </tr>
               ) : (
-                filteredProducts?.map((product) => (
+                products?.map((product) => (
                   <tr key={product.id} className="hover:bg-slate-50 transition-colors">
                     <td className="px-6 py-4">
                       <div className="font-medium text-slate-900">{product.name}</div>
@@ -178,6 +210,34 @@ export default function ProductsList() {
             </tbody>
           </table>
         </div>
+        
+        {totalPages > 1 && (
+          <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
+            <p className="text-xs text-slate-500">
+              Mostrando <span className="font-bold">{page * itemsPerPage + 1}</span> a <span className="font-bold">{Math.min((page + 1) * itemsPerPage, productsCount || 0)}</span> de <span className="font-bold">{productsCount}</span> produtos
+            </p>
+            <div className="flex gap-2">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                disabled={page === 0}
+                onClick={() => setPage(p => p - 1)}
+              >
+                <ChevronLeft className="w-4 h-4 mr-1" />
+                Anterior
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm"
+                disabled={page >= totalPages - 1}
+                onClick={() => setPage(p => p + 1)}
+              >
+                Próximo
+                <ChevronRight className="w-4 h-4 ml-1" />
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

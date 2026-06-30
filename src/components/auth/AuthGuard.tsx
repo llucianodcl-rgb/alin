@@ -69,6 +69,17 @@ export const AuthGuard: React.FC<AuthGuardProps> = ({ children, requireAdmin = f
 
   const isSuperAdmin = user?.email === 'llucianodcl@gmail.com';
 
+  if (!profile && !isSuperAdmin) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
+        <div className="max-w-md w-full bg-white rounded-2xl shadow-xl shadow-slate-200 p-8 text-center space-y-6">
+          <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
+          <p className="text-slate-500 font-medium">Carregando perfil...</p>
+        </div>
+      </div>
+    );
+  }
+
   if (profile?.status === 'pending' && !isSuperAdmin) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">

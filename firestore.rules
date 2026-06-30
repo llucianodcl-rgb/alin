@@ -34,7 +34,17 @@ service cloud.firestore {
 
     match /auditLogs/{logId} {
       allow read: if isAdmin();
-      allow create: if isAdmin();
+      allow create: if isApproved();
+    }
+
+    match /statistics/{statId} {
+      allow read: if isApproved();
+      allow write: if isApproved();
+    }
+
+    match /{collection}/{id} {
+      allow read: if isApproved();
+      allow write: if isApproved();
     }
 
     match /settings/{settingId} {

@@ -68,6 +68,9 @@ const navigation = [
       { name: 'Despesas', href: '/financeiro/despesas' },
       { name: 'Fluxo de Caixa', href: '/financeiro/fluxo-caixa' },
       { name: 'DRE', href: '/financeiro/dre' },
+      { name: 'Fechamento', href: '/financeiro/fechamento' },
+      { name: 'Conciliação', href: '/financeiro/conciliacao' },
+      { name: 'Investigações', href: '/financeiro/investigacoes' },
     ]
   },
   {

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { db, generateId } from '../db/db';
+import { db } from '../db/db';
+import { inventoryRepository } from '../db/repository';
 import { Inventory } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { ArrowLeft, Save, ClipboardList } from 'lucide-react';
@@ -22,9 +23,7 @@ export function InventoryCreate() {
     setLoading(true);
 
     try {
-      const newInventoryId = generateId();
-      const newInventory: Inventory = {
-        id: newInventoryId,
+      const newInventoryId = await inventoryRepository.add({
         name: formData.name,
         notes: formData.notes,
         type: formData.type,
@@ -37,11 +36,8 @@ export function InventoryCreate() {
         totalDifference: 0,
         totalFinancialDifference: 0,
         items: [],
-        createdAt: new Date().toISOString(),
         createdBy: profile.uid,
-      };
-
-      await db.inventories.add(newInventory);
+      } as any);
       
       await auditService.log({
         userId: profile.uid,

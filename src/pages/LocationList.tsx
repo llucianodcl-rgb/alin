@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db, generateId } from '../db/db';
+import { db } from '../db/db';
+import { locationRepository } from '../db/repository';
 import { WarehouseLocation, LocationType } from '../types';
 import { Map, Plus, Edit2, Trash2, MapPin, ChevronRight, ChevronDown, ZoomIn, ZoomOut, Maximize, Layers } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
@@ -78,10 +79,7 @@ export default function LocationList() {
 
     try {
       if (editingLocation?.id) {
-        await db.locations.update(editingLocation.id, {
-          ...formData,
-          updatedAt: new Date().toISOString()
-        });
+        await locationRepository.update(editingLocation.id, formData as any);
         
         await auditService.log({
           userId: profile!.uid,
@@ -89,17 +87,11 @@ export default function LocationList() {
           module: 'ALMOXARIFADO',
           action: 'UPDATE',
           targetId: editingLocation.id,
-          targetName: formData.name,
+          targetName: formData.name!,
           details: 'Localização atualizada.'
         });
       } else {
-        const newId = generateId();
-        await db.locations.add({
-          ...(formData as WarehouseLocation),
-          id: newId,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        });
+        const newId = await locationRepository.add(formData as any);
         
         await auditService.log({
           userId: profile!.uid,
@@ -107,7 +99,7 @@ export default function LocationList() {
           module: 'ALMOXARIFADO',
           action: 'CREATE',
           targetId: newId,
-          targetName: formData.name,
+          targetName: formData.name!,
           details: 'Localização criada.'
         });
       }
@@ -121,7 +113,7 @@ export default function LocationList() {
   const handleDelete = async (loc: WarehouseLocation) => {
     if (confirm(`Tem certeza que deseja excluir a localização ${loc.name}?`)) {
       try {
-        await db.locations.delete(loc.id!);
+        await locationRepository.delete(loc.id!);
         await auditService.log({
           userId: profile!.uid,
           userName: profile!.displayName || profile!.email || 'Usuário',

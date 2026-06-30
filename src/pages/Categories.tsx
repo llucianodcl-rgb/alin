@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db, generateId } from '../db/db';
+import { db } from '../db/db';
+import { categoryRepository } from '../db/repository';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Label } from '../components/ui/Label';
@@ -44,28 +45,26 @@ export default function Categories() {
           const oldCat = categories?.find(c => c.id === editingId);
           const previousData = { ...oldCat! };
           
-          await db.categories.update(editingId, { name, description });
+          await categoryRepository.update(editingId, { name, description } as any);
           setEditingId(null);
           
           showUndo({
             message: 'Categoria atualizada com sucesso.',
             onUndo: async () => {
-              await db.categories.update(editingId, previousData);
+              await categoryRepository.update(editingId, previousData as any);
             }
           });
         } else {
-          const newId = generateId();
-          await db.categories.add({
-            id: newId,
+          const newId = await categoryRepository.add({
             name,
             description
-          });
+          } as any);
           setIsAdding(false);
           
           showUndo({
             message: 'Categoria cadastrada com sucesso.',
             onUndo: async () => {
-              await db.categories.delete(newId);
+              await categoryRepository.delete(newId);
             }
           });
         }
@@ -80,14 +79,16 @@ export default function Categories() {
       confirmLabel: 'Excluir',
       variant: 'destructive',
       onConfirm: async () => {
-        await db.categories.delete(cat.id!);
-        
-        showUndo({
-          message: 'Categoria excluída com sucesso.',
-          onUndo: async () => {
-            await db.categories.add(cat);
-          }
-        });
+        if (cat.id) {
+          await categoryRepository.delete(cat.id);
+          
+          showUndo({
+            message: 'Categoria excluída com sucesso.',
+            onUndo: async () => {
+              await categoryRepository.add(cat as any);
+            }
+          });
+        }
       }
     });
   };

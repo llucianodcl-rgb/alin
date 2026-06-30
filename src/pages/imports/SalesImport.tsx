@@ -1,7 +1,15 @@
 import React, { useState, useRef } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db, generateId } from '../../db/db';
-import { Receipt, ArrowLeft, UploadCloud, FileText, CheckCircle2, AlertTriangle, AlertCircle } from 'lucide-react';
+import { db } from '../../db/db';
+import { 
+  productRepository, 
+  stockEventRepository, 
+  auditRepository, 
+  revenueRepository, 
+  importHistoryRepository,
+  investigationRepository
+} from '../../db/repository';
+import { Receipt, ArrowLeft, UploadCloud, FileText, CheckCircle2, AlertTriangle, AlertCircle, Store, Search } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
@@ -9,6 +17,7 @@ import { Select } from '../../components/ui/Select';
 import { useNotification } from '../../contexts/NotificationContext';
 import { useAuth } from '../../contexts/AuthContext';
 import Papa from 'papaparse';
+import { ReconciliationEngine } from '../../services/ReconciliationEngine';
 
 type ImportStep = 'UPLOAD' | 'PREVIEW' | 'IMPORTING' | 'DONE';
 
@@ -18,6 +27,7 @@ interface PreviewData {
   invalidRows: number;
   productsFound: number;
   productsNotFound: number;
+  totalFinancial: number;
   errors: any[];
   parsedData: any[];
 }
@@ -31,12 +41,15 @@ export default function SalesImport() {
   const templates = useLiveQuery(() => db.importTemplates.where('type').equals('SALES').toArray(), []) || [];
   const products = useLiveQuery(() => db.products.toArray(), []) || [];
   const importHistory = useLiveQuery(() => db.importHistory.toArray(), []) || [];
+  const registers = useLiveQuery(() => db.cashRegisters.where('status').equals('ACTIVE').toArray(), []) || [];
   
   const [selectedTemplate, setSelectedTemplate] = useState('');
+  const [selectedRegisterId, setSelectedRegisterId] = useState('');
   const [step, setStep] = useState<ImportStep>('UPLOAD');
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<PreviewData | null>(null);
   const [progress, setProgress] = useState({ current: 0, total: 0, message: '' });
+  const [reconciliationResult, setReconciliationResult] = useState<import('../../types').CashReconciliation | null>(null);
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -45,6 +58,10 @@ export default function SalesImport() {
   const processFile = async (selectedFile: File) => {
     if (!selectedTemplate) {
       showNotification('Selecione um layout primeiro.', 'error');
+      return;
+    }
+    if (!selectedRegisterId) {
+      showNotification('Selecione um caixa para a importação.', 'error');
       return;
     }
     
@@ -93,14 +110,20 @@ export default function SalesImport() {
     let invalidRows = 0;
     let productsFound = new Set();
     let productsNotFound = new Set();
+    let totalFinancial = 0;
     let errors: any[] = [];
     
     data.forEach((row, index) => {
       const barcodeCol = mapping['barcode'];
       const qtyCol = mapping['quantity'];
+      const unitPriceCol = mapping['unitPrice'];
+      const totalPriceCol = mapping['totalPrice'];
       
       const barcode = row[barcodeCol];
       const qty = parseFloat(row[qtyCol]?.toString().replace(',', '.') || '0');
+      
+      const unitPrice = unitPriceCol && row[unitPriceCol] ? parseFloat(row[unitPriceCol].toString().replace(',', '.')) : 0;
+      const rowTotal = totalPriceCol && row[totalPriceCol] ? parseFloat(row[totalPriceCol].toString().replace(',', '.')) : (qty * unitPrice);
 
       if (!barcode || isNaN(qty) || qty <= 0) {
         invalidRows++;
@@ -113,6 +136,9 @@ export default function SalesImport() {
       const product = products.find(p => p.barcode === barcode || p.internalCode === barcode);
       if (product) {
         productsFound.add(product.id);
+        if (!isNaN(rowTotal)) {
+          totalFinancial += rowTotal;
+        }
       } else {
         productsNotFound.add(barcode);
         errors.push({ row: index + 2, reason: `Produto não encontrado: ${barcode}` });
@@ -125,13 +151,14 @@ export default function SalesImport() {
       invalidRows,
       productsFound: productsFound.size,
       productsNotFound: productsNotFound.size,
+      totalFinancial,
       errors,
       parsedData: data
     });
   };
 
   const handleImport = async () => {
-    if (!preview || !file || !selectedTemplate || !profile) return;
+    if (!preview || !file || !selectedTemplate || !selectedRegisterId || !profile) return;
     
     setStep('IMPORTING');
     const template = templates.find(t => t.id === selectedTemplate);
@@ -140,6 +167,7 @@ export default function SalesImport() {
     const startTime = performance.now();
     let successCount = 0;
     let errorCount = 0;
+    let amountSuccessfullyImported = 0;
     
     try {
       setProgress({ current: 0, total: preview.parsedData.length, message: 'Iniciando importação...' });
@@ -148,13 +176,16 @@ export default function SalesImport() {
         const row = preview.parsedData[i];
         
         if (i % 10 === 0) {
-          setProgress({ current: i, total: preview.parsedData.length, message: 'Atualizando estoque...' });
+          setProgress({ current: i, total: preview.parsedData.length, message: 'Atualizando estoque e financeiro...' });
           // Pequena pausa para a UI atualizar
           await new Promise(r => setTimeout(r, 0));
         }
 
         const barcodeCol = template.fieldMapping['barcode'];
         const qtyCol = template.fieldMapping['quantity'];
+        const unitPriceCol = template.fieldMapping['unitPrice'];
+        const totalPriceCol = template.fieldMapping['totalPrice'];
+        const invoiceCol = template.fieldMapping['invoiceNumber'];
         
         const barcode = row[barcodeCol];
         const qty = parseFloat(row[qtyCol]?.toString().replace(',', '.') || '0');
@@ -164,43 +195,58 @@ export default function SalesImport() {
           continue;
         }
 
+        const unitPrice = unitPriceCol && row[unitPriceCol] ? parseFloat(row[unitPriceCol].toString().replace(',', '.')) : 0;
+        const rowTotal = totalPriceCol && row[totalPriceCol] ? parseFloat(row[totalPriceCol].toString().replace(',', '.')) : (qty * unitPrice);
+
         const product = products.find(p => p.barcode === barcode || p.internalCode === barcode);
-        
-        if (product) {
+         if (product) {
           // Registrar Saída
-          await db.transaction('rw', db.products, db.stockEvents, db.auditLogs, async () => {
-            const eventId = generateId();
-            const date = new Date().toISOString();
-            
-            await db.stockEvents.add({
-              id: eventId,
-              productId: product.id!,
-              type: 'SAIDA',
-              quantity: qty,
-              date,
-              reason: 'Venda',
-              userId: profile.id,
-              notes: `Importação de vendas via arquivo ${file.name}`
-            });
+          const eventId = await stockEventRepository.add({
+            productId: product.id!,
+            type: 'SAIDA',
+            quantity: qty,
+            date: new Date().toISOString(),
+            reason: 'Venda',
+            userId: profile.id,
+            cashRegisterId: selectedRegisterId,
+            notes: `Importação de vendas via arquivo ${file.name}`
+          } as any);
 
-            await db.products.update(product.id!, {
-              currentStock: product.currentStock - qty
-            });
-
-            await db.auditLogs.add({
-              id: generateId(),
-              userId: profile.id,
-              userName: profile.name,
-              timestamp: date,
-              module: 'ALMOXARIFADO',
-              action: 'UPDATE',
-              targetId: product.id,
-              targetName: product.name,
-              quantityChanged: -qty,
-              details: 'Saída por importação de vendas'
-            });
+          await productRepository.update(product.id!, {
+            currentStock: product.currentStock - qty
+          } as any, {
+            totalStockValue: -qty * (product.unitCost || 0)
           });
+
+          await auditRepository.add({
+            userId: profile.id,
+            userName: profile.name,
+            timestamp: new Date().toISOString(),
+            module: 'ALMOXARIFADO',
+            action: 'UPDATE',
+            targetId: product.id,
+            targetName: product.name,
+            cashRegisterId: selectedRegisterId,
+            quantityChanged: -qty,
+            details: 'Saída por importação de vendas'
+          } as any);
+          
+          if (!isNaN(rowTotal) && rowTotal > 0) {
+            await revenueRepository.add({
+              description: `Venda - ${product.name} (Qtd: ${qty})${invoiceCol && row[invoiceCol] ? ` - Doc: ${row[invoiceCol]}` : ''}`,
+              amount: rowTotal,
+              date: new Date().toISOString(),
+              source: 'SALE',
+              referenceId: eventId,
+              status: 'RECEIVED',
+              cashRegisterId: selectedRegisterId
+            } as any, {
+              monthlyRevenue: rowTotal,
+              monthlyProfit: rowTotal - ((product.unitCost || 0) * qty)
+            });
+          }
           successCount++;
+          amountSuccessfullyImported += (!isNaN(rowTotal) ? rowTotal : 0);
         } else {
           errorCount++;
         }
@@ -210,8 +256,7 @@ export default function SalesImport() {
       const timeMs = Math.round(endTime - startTime);
       
       // Registrar Histórico
-      await db.importHistory.add({
-        id: generateId(),
+      const importId = await importHistoryRepository.add({
         date: new Date().toISOString(),
         fileName: file.name,
         fileHash: file.size.toString(), // Simplified hash for now
@@ -222,8 +267,22 @@ export default function SalesImport() {
         status: errorCount === 0 ? 'SUCCESS' : (successCount > 0 ? 'PARTIAL' : 'FAILED'),
         timeMs,
         userId: profile.id,
+        cashRegisterId: selectedRegisterId,
         errors: preview.errors.slice(0, 100) // limit errors saved
-      });
+      } as any);
+
+      // Run Smart Reconciliation
+      const reconciliationResult = await ReconciliationEngine.runReconciliation(
+        selectedRegisterId,
+        profile.id,
+        'IMPORT',
+        importId,
+        amountSuccessfullyImported, // The amount actually successfully imported
+        preview.totalFinancial, // The expected amount from the PDV file
+        preview.totalRows // Using total sales count as reference
+      );
+
+      setReconciliationResult(reconciliationResult);
 
       setStep('DONE');
       showNotification('Importação concluída.', 'success');
@@ -250,7 +309,7 @@ export default function SalesImport() {
       return;
     }
     
-    const csvContent = headers.join(',') + '\\n';
+    const csvContent = headers.join(',') + '\n';
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -278,29 +337,43 @@ export default function SalesImport() {
 
       {step === 'UPLOAD' && (
         <Card className="p-6 space-y-6">
-          <div>
-            <label className="block text-sm font-bold text-slate-700 mb-2">Selecione o Layout de Arquivo</label>
-            <div className="flex gap-4">
-              <Select className="flex-1" value={selectedTemplate} onChange={e => setSelectedTemplate(e.target.value)}>
-                <option value="">Selecione...</option>
-                {templates.map(t => (
-                  <option key={t.id} value={t.id}>{t.name}</option>
-                ))}
-              </Select>
-              <Button variant="outline" onClick={downloadTemplate}>Baixar Modelo</Button>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-bold text-slate-700 mb-2">Caixa Destino *</label>
+              <div className="flex items-center gap-2">
+                <Store className="w-5 h-5 text-slate-400" />
+                <Select className="flex-1" value={selectedRegisterId} onChange={e => setSelectedRegisterId(e.target.value)}>
+                  <option value="">Selecione um caixa...</option>
+                  {registers.map(r => (
+                    <option key={r.id} value={r.id}>{r.name}</option>
+                  ))}
+                </Select>
+              </div>
             </div>
-            {templates.length === 0 && (
-              <p className="text-xs text-amber-600 mt-2">Nenhum layout configurado. Acesse a Configuração de Layout primeiro.</p>
-            )}
+            <div>
+              <label className="block text-sm font-bold text-slate-700 mb-2">Layout de Arquivo *</label>
+              <div className="flex gap-4">
+                <Select className="flex-1" value={selectedTemplate} onChange={e => setSelectedTemplate(e.target.value)}>
+                  <option value="">Selecione...</option>
+                  {templates.map(t => (
+                    <option key={t.id} value={t.id}>{t.name}</option>
+                  ))}
+                </Select>
+                <Button variant="outline" onClick={downloadTemplate}>Baixar Modelo</Button>
+              </div>
+              {templates.length === 0 && (
+                <p className="text-xs text-amber-600 mt-2">Nenhum layout configurado. Acesse a Configuração de Layout primeiro.</p>
+              )}
+            </div>
           </div>
 
           <div 
             className={`border-2 border-dashed rounded-2xl p-12 text-center transition-all ${
-              selectedTemplate ? 'border-slate-300 hover:border-blue-500 hover:bg-blue-50 cursor-pointer' : 'border-slate-200 bg-slate-50 opacity-50 cursor-not-allowed'
+              selectedTemplate && selectedRegisterId ? 'border-slate-300 hover:border-blue-500 hover:bg-blue-50 cursor-pointer' : 'border-slate-200 bg-slate-50 opacity-50 cursor-not-allowed'
             }`}
             onDragOver={handleDragOver}
-            onDrop={selectedTemplate ? handleDrop : undefined}
-            onClick={() => selectedTemplate && fileInputRef.current?.click()}
+            onDrop={(selectedTemplate && selectedRegisterId) ? handleDrop : undefined}
+            onClick={() => (selectedTemplate && selectedRegisterId) && fileInputRef.current?.click()}
           >
             <input 
               type="file" 
@@ -309,10 +382,10 @@ export default function SalesImport() {
               accept=".csv"
               onChange={(e) => e.target.files && processFile(e.target.files[0])}
             />
-            <UploadCloud className={`w-16 h-16 mx-auto mb-4 ${selectedTemplate ? 'text-blue-500' : 'text-slate-300'}`} />
+            <UploadCloud className={`w-16 h-16 mx-auto mb-4 ${selectedTemplate && selectedRegisterId ? 'text-blue-500' : 'text-slate-300'}`} />
             <h3 className="text-xl font-bold text-slate-700 mb-2">Arraste seu arquivo CSV aqui</h3>
             <p className="text-slate-500 mb-6">ou clique para procurar no seu computador</p>
-            <Button disabled={!selectedTemplate}>Selecionar Arquivo</Button>
+            <Button disabled={!selectedTemplate || !selectedRegisterId}>Selecionar Arquivo</Button>
           </div>
         </Card>
       )}
@@ -323,11 +396,13 @@ export default function SalesImport() {
             <FileText className="w-8 h-8 text-blue-600" />
             <div>
               <h2 className="text-lg font-bold text-slate-800">{file?.name}</h2>
-              <p className="text-sm text-slate-500">Resumo da análise do arquivo</p>
+              <p className="text-sm text-slate-500">
+                Importando para: <strong>{registers.find(r => r.id === selectedRegisterId)?.name}</strong>
+              </p>
             </div>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
             <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
               <p className="text-xs font-bold text-slate-400 uppercase">Linhas Totais</p>
               <p className="text-2xl font-bold text-slate-800">{preview.totalRows}</p>
@@ -343,6 +418,12 @@ export default function SalesImport() {
             <div className="bg-red-50 p-4 rounded-xl border border-red-200">
               <p className="text-xs font-bold text-red-600 uppercase">Erros Fatais</p>
               <p className="text-2xl font-bold text-red-700">{preview.invalidRows}</p>
+            </div>
+            <div className="bg-blue-50 p-4 rounded-xl border border-blue-200">
+              <p className="text-xs font-bold text-blue-600 uppercase">Financeiro</p>
+              <p className="text-2xl font-bold text-blue-700">
+                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(preview.totalFinancial)}
+              </p>
             </div>
           </div>
 
@@ -365,7 +446,7 @@ export default function SalesImport() {
           <div className="bg-blue-50 p-4 rounded-xl border border-blue-200 flex items-start gap-3">
             <AlertTriangle className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
             <div className="text-sm text-blue-800">
-              <strong>Importante:</strong> Itens sem cadastro ou com erros serão ignorados durante a importação. A importação atualizará os estoques automaticamente e registrará as movimentações.
+              <strong>Importante:</strong> Itens sem cadastro ou com erros serão ignorados durante a importação. A importação atualizará os estoques automaticamente, registrará as movimentações no caixa selecionado, e criará os recebimentos correspondentes.
             </div>
           </div>
 
@@ -404,23 +485,118 @@ export default function SalesImport() {
       )}
 
       {step === 'DONE' && (
-        <Card className="p-12 text-center space-y-6">
-          <div className="w-20 h-20 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto">
-            <CheckCircle2 className="w-10 h-10" />
-          </div>
-          <div>
-            <h2 className="text-2xl font-bold text-slate-800 mb-2">Importação Concluída</h2>
-            <p className="text-slate-500 mb-6">Os estoques e históricos foram atualizados com sucesso.</p>
-            <div className="flex justify-center gap-4">
-              <Button variant="outline" onClick={() => navigate('/almoxarifado/importacoes/historico')}>
-                Ver Histórico
-              </Button>
-              <Button onClick={() => setStep('UPLOAD')}>
-                Nova Importação
-              </Button>
+        <div className="space-y-6">
+          <Card className="p-12 text-center space-y-6">
+            <div className="w-20 h-20 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto">
+              <CheckCircle2 className="w-10 h-10" />
             </div>
-          </div>
-        </Card>
+            <div>
+              <h2 className="text-2xl font-bold text-slate-800 mb-2">Importação Concluída</h2>
+              <p className="text-slate-500 mb-6">Os estoques e históricos foram atualizados com sucesso no caixa selecionado.</p>
+              <div className="flex justify-center gap-4">
+                <Button variant="outline" onClick={() => navigate('/almoxarifado/importacoes/historico')}>
+                  Ver Histórico
+                </Button>
+                <Button onClick={() => {
+                  setStep('UPLOAD');
+                  setFile(null);
+                  setPreview(null);
+                  setReconciliationResult(null);
+                }}>
+                  Nova Importação
+                </Button>
+              </div>
+            </div>
+          </Card>
+          
+          {reconciliationResult && (
+            <Card className={`p-6 border-l-4 ${reconciliationResult.status === 'OK' ? 'border-emerald-500' : reconciliationResult.status === 'WARNING' ? 'border-amber-500' : 'border-red-500'}`}>
+              <div className="flex items-start gap-4">
+                {reconciliationResult.status === 'OK' ? (
+                  <CheckCircle2 className="w-8 h-8 text-emerald-500 shrink-0" />
+                ) : reconciliationResult.status === 'WARNING' ? (
+                  <AlertTriangle className="w-8 h-8 text-amber-500 shrink-0" />
+                ) : (
+                  <AlertCircle className="w-8 h-8 text-red-500 shrink-0" />
+                )}
+                
+                <div className="flex-1 space-y-4">
+                  <div>
+                    <h3 className="text-xl font-bold text-slate-800">
+                      {reconciliationResult.status === 'OK' ? 'Caixa conciliado com sucesso.' : 'Divergências encontradas.'}
+                    </h3>
+                    <p className="text-slate-600">
+                      Diferença: <span className={`font-bold ${reconciliationResult.difference === 0 ? 'text-emerald-600' : reconciliationResult.difference > 0 ? 'text-blue-600' : 'text-red-600'}`}>
+                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(reconciliationResult.difference)}
+                      </span>
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl">
+                    <div>
+                      <p className="text-xs font-bold text-slate-500 uppercase">Valor Esperado (PDV)</p>
+                      <p className="text-lg font-bold text-slate-800">
+                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(reconciliationResult.expectedAmount)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-slate-500 uppercase">Valor Importado</p>
+                      <p className="text-lg font-bold text-slate-800">
+                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(reconciliationResult.informedAmount)}
+                      </p>
+                    </div>
+                  </div>
+
+                  {reconciliationResult.suggestedCauses && reconciliationResult.suggestedCauses.length > 0 && (
+                    <div className="bg-amber-50 p-4 rounded-xl border border-amber-200">
+                      <h4 className="font-bold text-amber-900 mb-2 flex items-center gap-2">
+                        <AlertCircle className="w-4 h-4" /> Possíveis Causas
+                      </h4>
+                      <ul className="list-disc list-inside text-sm text-amber-800 space-y-1">
+                        {reconciliationResult.suggestedCauses.map((cause, i) => (
+                          <li key={i}>{cause}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {reconciliationResult.notes && (
+                    <div className="bg-blue-50 p-4 rounded-xl border border-blue-200 text-sm text-blue-800 font-medium">
+                      {reconciliationResult.notes}
+                    </div>
+                  )}
+
+                  {reconciliationResult.status !== 'OK' && (
+                    <div className="pt-4 border-t border-slate-100 flex justify-end">
+                      <Button 
+                        variant="primary" 
+                        onClick={async () => {
+                          const invId = await investigationRepository.add({
+                            reconciliationId: reconciliationResult.id!,
+                            cashRegisterId: reconciliationResult.cashRegisterId,
+                            operatorId: reconciliationResult.operatorId,
+                            date: new Date().toISOString(),
+                            difference: reconciliationResult.difference,
+                            status: 'IN_PROGRESS',
+                            checklist: {},
+                            notes: '',
+                            evidences: [],
+                            investigatorId: profile?.id || 'system'
+                          } as any);
+                          navigate(`/financeiro/investigacoes/${invId}`);
+                        }}
+                        className="bg-indigo-600 hover:bg-indigo-700"
+                      >
+                        <Search className="w-4 h-4 mr-2" />
+                        Iniciar Investigação Assistida
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </Card>
+          )}
+        </div>
       )}
     </div>
   );

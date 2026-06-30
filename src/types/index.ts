@@ -1,25 +1,54 @@
+export interface BaseEntity {
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+  syncStatus?: 'PENDING' | 'SYNCED' | 'ERROR';
+  lastSyncedAt?: string;
+  deleted?: boolean;
+}
+
+export interface CashRegister extends BaseEntity {
+  name: string;
+  code?: string;
+  description?: string;
+  defaultOperatorId?: string;
+  status: 'ACTIVE' | 'INACTIVE';
+  color: string;
+  notes?: string;
+}
+
+export interface CashRegisterClosure extends BaseEntity {
+  cashRegisterId: string;
+  operatorId?: string;
+  date: string;
+  totalSales: number;
+  totalReceived: number;
+  totalWithdrawals: number;
+  totalDeposits: number;
+  totalExpenses: number;
+  expectedAmount: number;
+  informedAmount: number;
+  difference: number;
+  notes?: string;
+}
+
 export type LocationType = 'WAREHOUSE' | 'SECTOR' | 'AISLE' | 'SHELF' | 'LEVEL' | 'POSITION' | 'FREEZER' | 'COLD_ROOM' | 'RECEIVING' | 'DISPATCH' | 'EXTERNAL';
 
-export interface WarehouseLocation {
-  id?: string;
+export interface WarehouseLocation extends BaseEntity {
   name: string;
   code: string;
   type: LocationType;
   parentId?: string;
   description?: string;
   status: 'ACTIVE' | 'INACTIVE';
-  createdAt: string;
-  updatedAt: string;
 }
 
-export type Category = {
-  id?: string;
+export interface Category extends BaseEntity {
   name: string;
   description?: string;
-};
+}
 
-export type Supplier = {
-  id?: string;
+export interface Supplier extends BaseEntity {
   companyName: string;
   tradeName?: string;
   cnpj?: string;
@@ -36,10 +65,9 @@ export type Supplier = {
   website?: string;
   contactName?: string;
   notes?: string;
-};
+}
 
-export type Product = {
-  id?: string;
+export interface Product extends BaseEntity {
   name: string;
   internalCode?: string;
   barcode?: string;
@@ -64,7 +92,7 @@ export type Product = {
   
   // Computed/Cached stock value (must be updated via events)
   currentStock: number;
-};
+}
 
 export type StockEventType = 'ENTRADA' | 'SAIDA' | 'AJUSTE' | 'INVENTARIO';
 
@@ -86,6 +114,9 @@ export type StockEvent = {
   // Specific to Saida
   reason?: 'Venda' | 'Perda' | 'Quebra' | 'Troca' | 'Uso interno' | 'Vencimento' | 'Doacao' | 'Outro';
   
+  // Cash Register
+  cashRegisterId?: string;
+  
   notes?: string;
 };
 
@@ -94,8 +125,7 @@ export type RecurrencePeriod = 'NONE' | 'WEEKLY' | 'BIWEEKLY' | 'MONTHLY' | 'BIM
 export type InsightSeverity = 'INFO' | 'WARNING' | 'IMPORTANT' | 'CRITICAL';
 export type InsightCategory = 'FINANCE' | 'STOCK' | 'HR' | 'GENERAL';
 
-export interface Insight {
-  id?: string;
+export interface Insight extends BaseEntity {
   title: string;
   message: string;
   severity: InsightSeverity;
@@ -104,8 +134,7 @@ export interface Insight {
   isRead: boolean;
 }
 
-export interface Expense {
-  id?: string;
+export interface Expense extends BaseEntity {
   description: string;
   categoryId?: string;
   amount: number;
@@ -120,34 +149,30 @@ export interface Expense {
   isRecurring: boolean;
   recurrencePeriod: RecurrencePeriod;
   referenceId?: string; // To link to a purchase/stock entry
-  createdAt: string;
+  cashRegisterId?: string;
 }
 
-export interface ExpenseCategory {
-  id?: string;
+export interface ExpenseCategory extends BaseEntity {
   name: string;
   description?: string;
 }
 
-export interface CostCenter {
-  id?: string;
+export interface CostCenter extends BaseEntity {
   name: string;
   description?: string;
 }
 
-export interface Revenue {
-  id?: string;
+export interface Revenue extends BaseEntity {
   description: string;
   amount: number;
   date: string;
   source: 'SALE' | 'SERVICE' | 'FINANCIAL' | 'OTHER';
   referenceId?: string; // To link to stock exit
   status: 'PENDING' | 'RECEIVED' | 'CANCELLED';
-  createdAt: string;
+  cashRegisterId?: string;
 }
 
-export interface Employee {
-  id?: string;
+export interface Employee extends BaseEntity {
   photo?: string;
   name: string;
   cpf?: string;
@@ -182,7 +207,6 @@ export interface Employee {
   agency?: string;
   account?: string;
   pix?: string;
-  createdAt: string;
 }
 
 export type InventoryStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
@@ -199,8 +223,7 @@ export interface InventoryItem {
   notes?: string;
 }
 
-export interface Inventory {
-  id?: string;
+export interface Inventory extends BaseEntity {
   name: string;
   responsibleId: string;
   responsibleName: string;
@@ -216,7 +239,6 @@ export interface Inventory {
   totalDifference: number;
   totalFinancialDifference: number;
   items: InventoryItem[];
-  createdAt: string;
   createdBy: string;
   approvedBy?: string;
   approvedAt?: string;
@@ -225,8 +247,7 @@ export interface Inventory {
 export type AuditModule = 'ALMOXARIFADO' | 'FINANCEIRO' | 'RH' | 'SISTEMA';
 export type AuditAction = 'CREATE' | 'UPDATE' | 'DELETE' | 'LOGIN' | 'LOGOUT' | 'SYNC' | 'ERROR' | 'APPROVE' | 'REJECT';
 
-export interface AuditLog {
-  id?: string;
+export interface AuditLog extends BaseEntity {
   userId: string;
   userName: string;
   timestamp: string;
@@ -237,9 +258,9 @@ export interface AuditLog {
   oldValue?: any;
   newValue?: any;
   quantityChanged?: number;
+  cashRegisterId?: string;
   details?: string;
   device?: string;
-  syncStatus?: 'PENDING' | 'SYNCED' | 'ERROR';
 }
 
 export type Draft = {
@@ -249,17 +270,13 @@ export type Draft = {
   updatedAt: string;
 };
 
-export interface ImportTemplate {
-  id?: string;
+export interface ImportTemplate extends BaseEntity {
   name: string;
   type: 'SALES' | 'PRODUCTS' | 'SUPPLIERS';
   fieldMapping: Record<string, string>; // e.g., { 'barcode': 'coluna1', 'quantity': 'coluna2' }
-  createdAt: string;
-  updatedAt: string;
 }
 
-export interface ImportHistory {
-  id?: string;
+export interface ImportHistory extends BaseEntity {
   date: string;
   fileName: string;
   fileHash: string;
@@ -270,12 +287,49 @@ export interface ImportHistory {
   status: 'SUCCESS' | 'PARTIAL' | 'FAILED';
   timeMs: number;
   userId: string;
+  cashRegisterId?: string;
   details?: string;
   errors?: {row: number; reason: string; item?: any}[];
 }
 
-export interface ScanLog {
-  id?: string;
+export interface CashReconciliation extends BaseEntity {
+  cashRegisterId: string;
+  date: string;
+  operatorId?: string;
+  totalSales: number;
+  expectedAmount: number;
+  informedAmount: number;
+  difference: number;
+  status: 'OK' | 'WARNING' | 'CRITICAL';
+  notes?: string;
+  suggestedCauses?: string[];
+  source: 'CLOSURE' | 'IMPORT';
+  referenceId?: string;
+}
+
+export interface SystemSettings extends BaseEntity {
+  reconciliationWarningLimit?: number;
+  reconciliationCriticalLimit?: number;
+  appPin?: string;
+  isLockEnabled?: boolean;
+}
+
+export interface Investigation extends BaseEntity {
+  reconciliationId: string;
+  cashRegisterId: string;
+  operatorId?: string;
+  date: string;
+  difference: number;
+  status: 'IN_PROGRESS' | 'COMPLETED';
+  checklist: Record<string, 'PENDING' | 'VERIFIED' | 'ATTENTION' | 'PROBLEM'>;
+  notes: string;
+  evidences: { id: string; name: string; url: string; type: string; timestamp: string }[];
+  conclusionReason?: string;
+  conclusionDetails?: string;
+  investigatorId: string;
+}
+
+export interface ScanLog extends BaseEntity {
   userId: string;
   userName: string;
   timestamp: string;
@@ -286,4 +340,21 @@ export interface ScanLog {
   targetName?: string;
   operation: string;
   device: string;
+}
+
+export interface GlobalStats {
+  id: string; // 'current' or 'global'
+  totalProducts: number;
+  expiredProducts: number;
+  nearExpirationProducts: number;
+  lowStockProducts: number;
+  totalStockValue: number;
+  monthlyRevenue: number;
+  monthlyExpenses: number;
+  monthlyProfit: number;
+  totalEmployees: number;
+  activeEvents: number;
+  unresolvedInventories: number;
+  criticalInvestigations: number;
+  lastUpdated: string;
 }

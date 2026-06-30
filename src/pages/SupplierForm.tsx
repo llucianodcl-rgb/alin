@@ -3,7 +3,8 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { db, generateId } from '../db/db';
+import { db } from '../db/db';
+import { supplierRepository } from '../db/repository';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Label } from '../components/ui/Label';
@@ -52,7 +53,7 @@ export default function SupplierForm() {
 
   useEffect(() => {
     if (isEditing && id) {
-      db.suppliers.get(id).then(supplier => {
+      supplierRepository.get(id).then(supplier => {
         if (supplier) {
           setOldSupplierData(supplier);
           reset(supplier);
@@ -70,25 +71,21 @@ export default function SupplierForm() {
         try {
           if (isEditing && id) {
             const previousData = { ...oldSupplierData! };
-            await db.suppliers.update(id, data);
+            await supplierRepository.update(id, data as any);
             
             showUndo({
               message: 'Fornecedor atualizado com sucesso.',
               onUndo: async () => {
-                await db.suppliers.update(id, previousData);
+                await supplierRepository.update(id, previousData as any);
               }
             });
           } else {
-            const newId = generateId();
-            await db.suppliers.add({
-              id: newId,
-              ...data
-            });
+            const newId = await supplierRepository.add(data as any);
             
             showUndo({
               message: 'Fornecedor cadastrado com sucesso.',
               onUndo: async () => {
-                await db.suppliers.delete(newId);
+                await supplierRepository.delete(newId);
               }
             });
           }
