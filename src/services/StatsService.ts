@@ -46,11 +46,20 @@ export class StatsService {
 
     try {
       await updateDoc(this.statsDocRef, incrementFields);
-    } catch (error) {
-      // If doc doesn't exist, initialize it
-      console.warn('Stats document not found, initializing...');
-      await this.initializeStats();
-      await updateDoc(this.statsDocRef, incrementFields);
+    } catch (error: any) {
+      if (error.code === 'not-found') {
+        console.warn('Stats document not found, initializing...');
+        try {
+          await this.initializeStats();
+          await updateDoc(this.statsDocRef, incrementFields);
+        } catch (initError) {
+          console.error('Failed to initialize stats:', initError);
+        }
+      } else {
+        console.error('Error updating metrics:', error);
+        // Do not throw to avoid blocking the main operation, 
+        // but log it so we know there's a permission or other issue
+      }
     }
   }
 

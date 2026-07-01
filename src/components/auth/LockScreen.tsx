@@ -27,10 +27,18 @@ export function LockScreen({ onUnlock }: LockScreenProps) {
 
     // Check biometrics availability
     const checkBiometrics = async () => {
-      if (window.PublicKeyCredential) {
-        const available = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+      try {
         const isEnabled = localStorage.getItem('alin_biometrics_enabled') === 'true';
-        setIsBiometricsAvailable(available && isEnabled);
+        if (isEnabled) {
+          // If enabled, we show it. Even if the browser check fails in iFrame, 
+          // we want to give the user the chance to try or see the button.
+          setIsBiometricsAvailable(true);
+        } else if (window.PublicKeyCredential) {
+          const available = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+          setIsBiometricsAvailable(available);
+        }
+      } catch (err) {
+        console.error("Biometrics check error:", err);
       }
     };
     checkBiometrics();

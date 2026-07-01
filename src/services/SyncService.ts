@@ -12,6 +12,7 @@ import {
   where,
   onSnapshot
 } from 'firebase/firestore';
+import { cleanUndefined } from '../utils/cleanData';
 
 export type SyncAction = 'CREATE' | 'UPDATE' | 'DELETE';
 
@@ -96,7 +97,7 @@ export class SyncService {
             firestoreBatch.delete(docRef);
           } else {
             firestoreBatch.set(docRef, {
-              ...item.data,
+              ...cleanUndefined(item.data),
               lastSyncedAt: serverTimestamp(),
               syncStatus: 'SYNCED'
             }, { merge: true });

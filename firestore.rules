@@ -4,7 +4,7 @@ service cloud.firestore {
     // Helper function to check if user is an admin
     function isAdmin() {
       return request.auth != null && (
-        request.auth.token.email == 'llucianodcl@gmail.com' ||
+        (request.auth.token.email != null && request.auth.token.email.lower() == 'llucianodcl@gmail.com') ||
         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' &&
          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.status == 'approved')
@@ -14,7 +14,7 @@ service cloud.firestore {
     // Helper function to check if user is approved
     function isApproved() {
       return request.auth != null && (
-        request.auth.token.email == 'llucianodcl@gmail.com' ||
+        (request.auth.token.email != null && request.auth.token.email.lower() == 'llucianodcl@gmail.com') ||
         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.status == 'approved')
       );

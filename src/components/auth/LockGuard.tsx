@@ -4,12 +4,19 @@ import { db } from '../../db/db';
 import { LockScreen } from './LockScreen';
 
 export function LockGuard({ children }: { children: React.ReactNode }) {
-  const settings = useLiveQuery(() => db.systemSettings.toCollection().first());
+  const settingsArray = useLiveQuery(() => db.systemSettings.toArray());
+  const settings = settingsArray?.[0];
   const [isLocked, setIsLocked] = useState(true);
   const [initialized, setInitialized] = useState(false);
 
   useEffect(() => {
-    if (settings !== undefined) {
+    const initTimeout = setTimeout(() => {
+      if (!initialized) {
+        setInitialized(true);
+      }
+    }, 5000);
+
+    if (settingsArray !== undefined) {
       const isLockActive = settings?.isLockEnabled && settings?.appPin;
       const sessionLock = sessionStorage.getItem('alin_app_locked');
       
@@ -23,10 +30,22 @@ export function LockGuard({ children }: { children: React.ReactNode }) {
         setIsLocked(false);
       }
       setInitialized(true);
+      clearTimeout(initTimeout);
     }
-  }, [settings]);
 
-  if (!initialized) return null;
+    return () => clearTimeout(initTimeout);
+  }, [settingsArray, settings, initialized]);
+
+  if (!initialized) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+          <p className="text-slate-500 font-medium">Iniciando sistema de segurança...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (isLocked) {
     return (

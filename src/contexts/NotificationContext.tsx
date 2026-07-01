@@ -10,7 +10,10 @@ interface ConfirmOptions {
   message: string;
   confirmLabel?: string;
   cancelLabel?: string;
+  confirmText?: string;
+  cancelText?: string;
   variant?: 'default' | 'destructive';
+  type?: 'default' | 'danger';
   onConfirm: () => Promise<void> | void;
   onCancel?: () => Promise<void> | void;
 }
@@ -44,7 +47,13 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const notificationTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const confirm = useCallback((options: ConfirmOptions) => {
-    setConfirmOptions(options);
+    const standardizedOptions = {
+      ...options,
+      confirmLabel: options.confirmLabel || options.confirmText || 'Confirmar',
+      cancelLabel: options.cancelLabel || options.cancelText || 'Cancelar',
+      variant: options.variant || (options.type === 'danger' ? 'destructive' : 'default')
+    };
+    setConfirmOptions(standardizedOptions);
   }, []);
 
   const showUnsavedChanges = useCallback((options: UnsavedChangesOptions) => {

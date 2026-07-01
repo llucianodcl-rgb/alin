@@ -48,6 +48,9 @@ const MOBILE_MENU = [
   { title: 'Despesas', icon: CreditCard, path: '/financeiro/despesas', color: 'text-red-500', bg: 'bg-red-50' },
   { title: 'Fluxo de Caixa', icon: Wallet, path: '/financeiro/fluxo-caixa', color: 'text-blue-500', bg: 'bg-blue-50' },
   { title: 'DRE', icon: Calendar, path: '/financeiro/dre', color: 'text-indigo-500', bg: 'bg-indigo-50' },
+  { title: 'Fechamento', icon: Store, path: '/financeiro/fechamento', color: 'text-purple-500', bg: 'bg-purple-50' },
+  { title: 'Conciliação', icon: ShieldCheck, path: '/financeiro/conciliacao', color: 'text-teal-500', bg: 'bg-teal-50' },
+  { title: 'Investigações', icon: ShieldAlert, path: '/financeiro/investigacoes', color: 'text-orange-500', bg: 'bg-orange-50' },
 ];
 
 export default function FinanceDashboard() {
@@ -124,7 +127,7 @@ export default function FinanceDashboard() {
     const total = (revenues || [])
       .filter(r => r.status === 'RECEIVED' && r.cashRegisterId === reg.id)
       .reduce((acc, r) => acc + r.amount, 0);
-    return { name: reg.name, value: total, color: reg.color };
+    return { id: reg.id, name: reg.name, value: total, color: reg.color };
   }).filter(r => r.value > 0);
 
   // Filter lists based on search
@@ -251,23 +254,24 @@ export default function FinanceDashboard() {
     </div>
   );
 
-  // Mock data for charts
-  const revenueVsExpenseData = [
+  // Data for charts
+  const showGraphs = (revenues.length > 0 || expenses.length > 0) || (employees && employees.length > 0);
+  const revenueVsExpenseData = showGraphs ? [
     { name: 'Jan', receita: 4000, despesa: 2400 },
     { name: 'Fev', receita: 3000, despesa: 1398 },
     { name: 'Mar', receita: 2000, despesa: 9800 },
     { name: 'Abr', receita: 2780, despesa: 3908 },
     { name: 'Mai', receita: 1890, despesa: 4800 },
     { name: 'Jun', receita: 2390, despesa: 3800 },
-  ];
+  ] : [];
 
   const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8'];
-  const expensesByCategoryData = [
+  const expensesByCategoryData = showGraphs ? [
     { name: 'Aluguel', value: 2000 },
     { name: 'Energia', value: 800 },
     { name: 'Fornecedores', value: 5000 },
     { name: 'Salários', value: salarySum || 3000 },
-  ];
+  ] : [];
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
@@ -299,43 +303,43 @@ export default function FinanceDashboard() {
         <div>
           <h2 className="font-bold text-slate-800 text-lg mb-4">Resumo Financeiro</h2>
           <div className="grid grid-cols-2 gap-4">
-            <Card className={`col-span-2 p-4 shadow-sm border ${healthColor.replace('bg-', 'bg-opacity-20 bg-')}`}>
-              <div className="flex items-center gap-3">
+            <Card className={`col-span-1 p-4 shadow-sm border ${healthColor.replace('bg-', 'bg-opacity-20 bg-')}`}>
+              <div className="flex flex-col gap-2">
                 <div className={`w-10 h-10 rounded-full flex items-center justify-center ${healthColor.split(' ')[1]}`}>
                   {healthIcon}
                 </div>
                 <div>
                   <p className={`text-xs font-bold uppercase ${healthColor.split(' ')[0]}`}>Saúde Financeira</p>
-                  <h3 className={`text-xl font-bold mt-0.5 ${healthColor.split(' ')[0]}`}>{healthStatus}</h3>
+                  <h3 className={`text-lg font-bold mt-0.5 ${healthColor.split(' ')[0]}`}>{healthStatus}</h3>
                 </div>
               </div>
             </Card>
-            <Card className={`col-span-2 p-4 shadow-sm border ${reliabilityColor.replace('bg-', 'bg-opacity-20 bg-')}`}>
-              <div className="flex items-center gap-3">
+            <Card className={`col-span-1 p-4 shadow-sm border ${reliabilityColor.replace('bg-', 'bg-opacity-20 bg-')}`}>
+              <div className="flex flex-col gap-2">
                 <div className={`w-10 h-10 rounded-full flex items-center justify-center ${reliabilityColor.split(' ')[1]}`}>
                   {reliabilityIcon}
                 </div>
                 <div>
                   <p className={`text-xs font-bold uppercase ${reliabilityColor.split(' ')[0]}`}>Confiabilidade de Caixa</p>
-                  <h3 className={`text-xl font-bold mt-0.5 ${reliabilityColor.split(' ')[0]}`}>{reliabilityStatus}</h3>
+                  <h3 className={`text-lg font-bold mt-0.5 ${reliabilityColor.split(' ')[0]}`}>{reliabilityStatus}</h3>
                 </div>
               </div>
             </Card>
             <Card className="p-4 shadow-sm border-emerald-100 bg-emerald-50">
               <p className="text-xs font-bold text-emerald-800 uppercase">Receitas</p>
-              <h3 className="text-xl font-bold text-emerald-900 mt-1">{formatCurrency(totalRevenue)}</h3>
+              <h3 className="text-lg font-bold text-emerald-900 mt-1">{formatCurrency(totalRevenue)}</h3>
             </Card>
             <Card className="p-4 shadow-sm border-red-100 bg-red-50">
               <p className="text-xs font-bold text-red-800 uppercase">Despesas</p>
-              <h3 className="text-xl font-bold text-red-900 mt-1">{formatCurrency(totalExpenses)}</h3>
+              <h3 className="text-lg font-bold text-red-900 mt-1">{formatCurrency(totalExpenses)}</h3>
             </Card>
             <Card className="p-4 shadow-sm border-blue-100 bg-blue-50">
               <p className="text-xs font-bold text-blue-800 uppercase">Lucro Líquido</p>
-              <h3 className="text-xl font-bold text-blue-900 mt-1">{formatCurrency(netProfit)}</h3>
+              <h3 className="text-lg font-bold text-blue-900 mt-1">{formatCurrency(netProfit)}</h3>
             </Card>
             <Card className="p-4 shadow-sm border-orange-100 bg-orange-50">
               <p className="text-xs font-bold text-orange-800 uppercase">A Pagar (Atrasado)</p>
-              <h3 className="text-xl font-bold text-orange-900 mt-1">{formatCurrency(overdueExpenses)}</h3>
+              <h3 className="text-lg font-bold text-orange-900 mt-1">{formatCurrency(overdueExpenses)}</h3>
             </Card>
           </div>
         </div>
@@ -346,7 +350,7 @@ export default function FinanceDashboard() {
             <Card>
               <CardContent className="p-4 space-y-4">
                 {revenueByRegisterRaw.map(r => (
-                  <div key={r.name} className="flex justify-between items-center border-b border-slate-100 pb-2 last:border-0 last:pb-0">
+                  <div key={r.id || r.name} className="flex justify-between items-center border-b border-slate-100 pb-2 last:border-0 last:pb-0">
                     <div className="flex items-center gap-2">
                       <div className="w-3 h-3 rounded-full" style={{ backgroundColor: r.color }} />
                       <span className="font-medium text-sm text-slate-700">{r.name}</span>
@@ -357,6 +361,74 @@ export default function FinanceDashboard() {
               </CardContent>
             </Card>
           </div>
+        )}
+
+        {/* Charts Section */}
+        {showGraphs ? (
+          <div className="grid grid-cols-1 gap-6">
+            <Card>
+              <CardContent className="p-6">
+                <h2 className="text-lg font-bold text-slate-800 mb-4">Receitas vs Despesas</h2>
+                <div className="h-[300px] w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={revenueVsExpenseData}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                      <XAxis dataKey="name" axisLine={false} tickLine={false} />
+                      <YAxis axisLine={false} tickLine={false} tickFormatter={(value) => `R$ ${value / 1000}k`} />
+                      <RechartsTooltip 
+                        cursor={false} 
+                        formatter={(value) => formatCurrency(value as number)} 
+                      />
+                      <Bar dataKey="receita" fill="#10b981" radius={[4, 4, 0, 0]} name="Receitas" />
+                      <Bar dataKey="despesa" fill="#ef4444" radius={[4, 4, 0, 0]} name="Despesas" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="p-6">
+                <h2 className="text-lg font-bold text-slate-800 mb-4">Gastos por Categoria</h2>
+                <div className="h-[200px] w-full flex items-center justify-center">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={expensesByCategoryData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={50}
+                        outerRadius={80}
+                        paddingAngle={5}
+                        dataKey="value"
+                      >
+                        {expensesByCategoryData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <RechartsTooltip 
+                        cursor={false} 
+                        formatter={(value) => formatCurrency(value as number)} 
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="flex flex-wrap justify-center gap-4 mt-2">
+                  {expensesByCategoryData.map((entry, index) => (
+                    <div key={entry.name} className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }}></div>
+                      <span className="text-xs text-slate-600">{entry.name}</span>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        ) : (
+          <Card className="p-6 text-center border-dashed border-2 border-slate-200 bg-slate-50">
+            <TrendingUp className="w-8 h-8 text-blue-600 mx-auto mb-2" />
+            <h3 className="text-sm font-bold text-slate-800">Nenhum dado financeiro</h3>
+          </Card>
         )}
       </div>
     );
@@ -454,86 +526,97 @@ export default function FinanceDashboard() {
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card className="lg:col-span-2">
-          <CardContent className="p-6">
-            <h2 className="text-lg font-bold text-slate-800 mb-4">Receitas vs Despesas (Mês a Mês)</h2>
-            <div className="h-[300px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={revenueVsExpenseData}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                  <XAxis dataKey="name" axisLine={false} tickLine={false} />
-                  <YAxis axisLine={false} tickLine={false} tickFormatter={(value) => `R$ ${value / 1000}k`} />
-                  <RechartsTooltip 
-                    cursor={false} 
-                    formatter={(value) => formatCurrency(value as number)} 
-                  />
-                  <Bar dataKey="receita" fill="#10b981" radius={[4, 4, 0, 0]} name="Receitas" />
-                  <Bar dataKey="despesa" fill="#ef4444" radius={[4, 4, 0, 0]} name="Despesas" />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
-
-        <div className="space-y-6">
-          <Card>
+      {/* Charts Section */}
+      {showGraphs ? (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <Card className="lg:col-span-2">
             <CardContent className="p-6">
-              <h2 className="text-lg font-bold text-slate-800 mb-4">Gastos por Categoria</h2>
-              <div className="h-[200px] w-full flex items-center justify-center">
+              <h2 className="text-lg font-bold text-slate-800 mb-4">Receitas vs Despesas (Mês a Mês)</h2>
+              <div className="h-[300px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={expensesByCategoryData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={50}
-                      outerRadius={80}
-                      paddingAngle={5}
-                      dataKey="value"
-                    >
-                      {expensesByCategoryData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Pie>
+                  <BarChart data={revenueVsExpenseData}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                    <XAxis dataKey="name" axisLine={false} tickLine={false} />
+                    <YAxis axisLine={false} tickLine={false} tickFormatter={(value) => `R$ ${value / 1000}k`} />
                     <RechartsTooltip 
                       cursor={false} 
                       formatter={(value) => formatCurrency(value as number)} 
                     />
-                  </PieChart>
+                    <Bar dataKey="receita" fill="#10b981" radius={[4, 4, 0, 0]} name="Receitas" />
+                    <Bar dataKey="despesa" fill="#ef4444" radius={[4, 4, 0, 0]} name="Despesas" />
+                  </BarChart>
                 </ResponsiveContainer>
-              </div>
-              <div className="flex flex-wrap justify-center gap-4 mt-2">
-                {expensesByCategoryData.map((entry, index) => (
-                  <div key={entry.name} className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }}></div>
-                    <span className="text-xs text-slate-600">{entry.name}</span>
-                  </div>
-                ))}
               </div>
             </CardContent>
           </Card>
 
-          {selectedRegisterId === 'ALL' && revenueByRegisterRaw.length > 0 && (
+          <div className="space-y-6">
             <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm">Recebimento por Caixa</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {revenueByRegisterRaw.map(r => (
-                  <div key={r.name} className="flex justify-between items-center">
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: r.color }} />
-                      <span className="font-medium text-sm text-slate-700">{r.name}</span>
+              <CardContent className="p-6">
+                <h2 className="text-lg font-bold text-slate-800 mb-4">Gastos por Categoria</h2>
+                <div className="h-[200px] w-full flex items-center justify-center">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={expensesByCategoryData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={50}
+                        outerRadius={80}
+                        paddingAngle={5}
+                        dataKey="value"
+                      >
+                        {expensesByCategoryData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <RechartsTooltip 
+                        cursor={false} 
+                        formatter={(value) => formatCurrency(value as number)} 
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="flex flex-wrap justify-center gap-4 mt-2">
+                  {expensesByCategoryData.map((entry, index) => (
+                    <div key={entry.name} className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }}></div>
+                      <span className="text-xs text-slate-600">{entry.name}</span>
                     </div>
-                    <span className="font-bold text-slate-900 text-sm">{formatCurrency(r.value)}</span>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </CardContent>
             </Card>
-          )}
+
+            {selectedRegisterId === 'ALL' && revenueByRegisterRaw.length > 0 && (
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm">Recebimento por Caixa</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {revenueByRegisterRaw.map(r => (
+                    <div key={r.name} className="flex justify-between items-center">
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: r.color }} />
+                        <span className="font-medium text-sm text-slate-700">{r.name}</span>
+                      </div>
+                      <span className="font-bold text-slate-900 text-sm">{formatCurrency(r.value)}</span>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            )}
+          </div>
         </div>
-      </div>
+      ) : (
+        <Card className="p-12 text-center border-dashed border-2 border-slate-200 bg-slate-50">
+          <div className="mx-auto w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mb-4">
+            <TrendingUp className="w-8 h-8 text-blue-600" />
+          </div>
+          <h3 className="text-lg font-bold text-slate-800">Nenhum dado financeiro encontrado</h3>
+          <p className="text-slate-500 mt-2">Cadastre suas receitas e despesas para que os gráficos possam aparecer aqui.</p>
+        </Card>
+      )}
       
     </div>
   );

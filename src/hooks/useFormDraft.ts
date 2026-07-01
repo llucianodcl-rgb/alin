@@ -8,13 +8,15 @@ interface UseFormDraftOptions<T extends FieldValues> {
   defaultValues: DefaultValues<T>;
   resolver?: Resolver<T>;
   onDraftLoad?: (data: T) => void;
+  disabled?: boolean;
 }
 
 export function useFormDraft<T extends FieldValues>({ 
   formId, 
   defaultValues,
   resolver,
-  onDraftLoad 
+  onDraftLoad,
+  disabled 
 }: UseFormDraftOptions<T>) {
   const { setIsDirty, saveDraft, discardDraft, getDraft } = useNavigation();
   const { confirm } = useNotification();
@@ -31,21 +33,23 @@ export function useFormDraft<T extends FieldValues>({
 
   // Update global isDirty state
   useEffect(() => {
-    setIsDirty(isDirty);
-  }, [isDirty, setIsDirty]);
+    setIsDirty(disabled ? false : isDirty);
+  }, [isDirty, setIsDirty, disabled]);
 
   // Auto-save draft on change
   useEffect(() => {
+    if (disabled) return;
     if (isDirty) {
       const timer = setTimeout(() => {
         saveDraft(formId, values);
       }, 1000);
       return () => clearTimeout(timer);
     }
-  }, [values, isDirty, formId, saveDraft]);
+  }, [values, isDirty, formId, saveDraft, disabled]);
 
   // Check for existing draft on mount
   useEffect(() => {
+    if (disabled) return;
     const checkDraft = async () => {
       const draftData = await getDraft(formId);
       if (draftData && !hasLoadedDraft) {
@@ -67,7 +71,7 @@ export function useFormDraft<T extends FieldValues>({
       }
     };
     checkDraft();
-  }, [formId, getDraft, confirm, reset, onDraftLoad, hasLoadedDraft, discardDraft]);
+  }, [formId, getDraft, confirm, reset, onDraftLoad, hasLoadedDraft, discardDraft, disabled]);
 
   const clearDraft = useCallback(async () => {
     await discardDraft(formId);

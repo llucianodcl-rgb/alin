@@ -100,9 +100,9 @@ export function CashRegistersSettings() {
     confirm({
       title: 'Excluir Caixa',
       message: `Deseja realmente excluir o caixa "${name}"? Isso só é permitido se não houver movimentações.`,
-      confirmText: 'Excluir',
-      cancelText: 'Cancelar',
-      type: 'danger',
+      confirmLabel: 'Excluir',
+      cancelLabel: 'Cancelar',
+      variant: 'destructive',
       onConfirm: async () => {
         try {
           const revenues = await revenueRepository.list({ cashRegisterId: id });

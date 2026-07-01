@@ -10,7 +10,7 @@ import { Input } from '../components/ui/Input';
 import { Label } from '../components/ui/Label';
 import { Select } from '../components/ui/Select';
 import { Card, CardContent } from '../components/ui/Card';
-import { ArrowLeft, Save, MapPin } from 'lucide-react';
+import { ArrowLeft, Save, MapPin, Pencil } from 'lucide-react';
 import { useNotification } from '../contexts/NotificationContext';
 import { useNavigation } from '../contexts/NavigationContext';
 import { useFormDraft } from '../hooks/useFormDraft';
@@ -60,19 +60,21 @@ export default function EmployeeForm() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { goBack } = useNavigation();
-  const isEditing = !!id;
+  const isNew = !id;
+  const [editMode, setEditMode] = useState(isNew);
   const { confirm, showUndo } = useNotification();
   const [oldData, setOldData] = useState<Employee | null>(null);
 
   const { register, handleSubmit, reset, watch, setValue, clearDraft, formState: { errors } } = useFormDraft<EmployeeFormData>({
-    formId: isEditing ? `employee_${id}` : 'employee_new',
+    formId: !isNew ? `employee_${id}` : 'employee_new',
     resolver: zodResolver(employeeSchema) as any,
     defaultValues: {
       status: 'ACTIVE',
       admissionDate: new Date().toISOString().split('T')[0],
       payday: 5,
       salary: 0
-    } as any
+    } as any,
+    disabled: !editMode
   });
 
   const address = watch('address');
@@ -80,7 +82,7 @@ export default function EmployeeForm() {
   const state = watch('state');
 
   useEffect(() => {
-    if (isEditing && id) {
+    if (!isNew && id) {
       employeeRepository.get(id).then(emp => {
         if (emp) {
           setOldData(emp);
@@ -88,7 +90,7 @@ export default function EmployeeForm() {
         }
       });
     }
-  }, [id, isEditing, reset]);
+  }, [id, isNew, reset]);
 
   const onSubmit = (data: EmployeeFormData) => {
     confirm({
@@ -97,7 +99,7 @@ export default function EmployeeForm() {
       confirmLabel: 'Salvar',
       onConfirm: async () => {
         try {
-          if (isEditing && id) {
+          if (!isNew && id) {
             const previousData = { ...oldData! };
             await employeeRepository.update(id, data as any);
             
@@ -148,172 +150,183 @@ export default function EmployeeForm() {
         </Button>
         <div>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
-            {isEditing ? 'Editar Funcionário' : 'Novo Funcionário'}
+            {!isNew ? 'Visualizar Funcionário' : 'Novo Funcionário'}
           </h1>
           <p className="text-slate-500 mt-1">
-            {isEditing ? 'Atualize os dados do funcionário' : 'Cadastre um novo membro da equipe'}
+            {!isNew ? 'Dados do funcionário' : 'Cadastre um novo membro da equipe'}
           </p>
         </div>
       </div>
+      
+      {!isNew && !editMode && (
+        <div className="flex justify-end">
+          <Button onClick={() => setEditMode(true)}>
+            <Pencil className="w-4 h-4 mr-2" />
+            Editar
+          </Button>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-        <Card>
-          <CardContent className="p-6 space-y-6">
-            <h2 className="text-lg font-semibold text-slate-900 border-b pb-2">Dados Pessoais</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Nome Completo *</Label>
-                <Input {...register('name')} error={errors.name?.message} />
+        <fieldset disabled={!editMode} className="space-y-6">
+          <Card>
+            <CardContent className="p-6 space-y-6">
+              <h2 className="text-lg font-semibold text-slate-900 border-b pb-2">Dados Pessoais</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Nome Completo *</Label>
+                  <Input {...register('name')} error={errors.name?.message} />
+                </div>
+                <div className="space-y-2">
+                  <Label>CPF</Label>
+                  <Input 
+                    {...register('cpf')} 
+                    onChange={(e) => {
+                      const masked = maskCPF(e.target.value);
+                      setValue('cpf', masked, { shouldDirty: true });
+                    }}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>RG</Label>
+                  <Input {...register('rg')} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Data de Nascimento</Label>
+                  <Input type="date" {...register('birthDate')} />
+                </div>
+                <div className="space-y-2">
+                  <Label>E-mail</Label>
+                  <Input type="email" {...register('email')} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Celular / WhatsApp</Label>
+                  <Input 
+                    {...register('whatsapp')} 
+                    onChange={(e) => {
+                      const masked = maskPhone(e.target.value);
+                      setValue('whatsapp', masked, { shouldDirty: true });
+                    }}
+                  />
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label>CPF</Label>
-                <Input 
-                  {...register('cpf')} 
-                  onChange={(e) => {
-                    const masked = maskCPF(e.target.value);
-                    setValue('cpf', masked, { shouldDirty: true });
-                  }}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>RG</Label>
-                <Input {...register('rg')} />
-              </div>
-              <div className="space-y-2">
-                <Label>Data de Nascimento</Label>
-                <Input type="date" {...register('birthDate')} />
-              </div>
-              <div className="space-y-2">
-                <Label>E-mail</Label>
-                <Input type="email" {...register('email')} />
-              </div>
-              <div className="space-y-2">
-                <Label>Celular / WhatsApp</Label>
-                <Input 
-                  {...register('whatsapp')} 
-                  onChange={(e) => {
-                    const masked = maskPhone(e.target.value);
-                    setValue('whatsapp', masked, { shouldDirty: true });
-                  }}
-                />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardContent className="p-6 space-y-6">
-            <div className="flex items-center justify-between border-b pb-2">
-              <h2 className="text-lg font-semibold text-slate-900">Endereço</h2>
-              <Button type="button" variant="ghost" size="sm" onClick={openMap} className="text-blue-600">
-                <MapPin className="w-4 h-4 mr-2" />
-                Abrir no Mapa
-              </Button>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="space-y-2 md:col-span-2">
-                <Label>Rua / Logradouro</Label>
-                <Input {...register('address')} />
+          <Card>
+            <CardContent className="p-6 space-y-6">
+              <div className="flex items-center justify-between border-b pb-2">
+                <h2 className="text-lg font-semibold text-slate-900">Endereço</h2>
+                <Button type="button" variant="ghost" size="sm" onClick={openMap} className="text-blue-600">
+                  <MapPin className="w-4 h-4 mr-2" />
+                  Abrir no Mapa
+                </Button>
               </div>
-              <div className="space-y-2">
-                <Label>Número</Label>
-                <Input {...register('number')} />
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2 md:col-span-2">
+                  <Label>Rua / Logradouro</Label>
+                  <Input {...register('address')} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Número</Label>
+                  <Input {...register('number')} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Bairro</Label>
+                  <Input {...register('neighborhood')} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Cidade</Label>
+                  <Input {...register('city')} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Estado (UF)</Label>
+                  <Input {...register('state')} />
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label>Bairro</Label>
-                <Input {...register('neighborhood')} />
-              </div>
-              <div className="space-y-2">
-                <Label>Cidade</Label>
-                <Input {...register('city')} />
-              </div>
-              <div className="space-y-2">
-                <Label>Estado (UF)</Label>
-                <Input {...register('state')} />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardContent className="p-6 space-y-6">
-            <h2 className="text-lg font-semibold text-slate-900 border-b pb-2">Dados Profissionais</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Cargo *</Label>
-                <Input {...register('role')} error={errors.role?.message} />
+          <Card>
+            <CardContent className="p-6 space-y-6">
+              <h2 className="text-lg font-semibold text-slate-900 border-b pb-2">Dados Profissionais</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Cargo *</Label>
+                  <Input {...register('role')} error={errors.role?.message} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Departamento</Label>
+                  <Input {...register('department')} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Data de Admissão *</Label>
+                  <Input type="date" {...register('admissionDate')} error={errors.admissionDate?.message} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Situação *</Label>
+                  <Select {...register('status')}>
+                    <option value="ACTIVE">Ativo</option>
+                    <option value="VACATION">Férias</option>
+                    <option value="LEAVE">Licença</option>
+                    <option value="SUSPENDED">Afastado</option>
+                    <option value="TERMINATED">Desligado</option>
+                  </Select>
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label>Departamento</Label>
-                <Input {...register('department')} />
-              </div>
-              <div className="space-y-2">
-                <Label>Data de Admissão *</Label>
-                <Input type="date" {...register('admissionDate')} error={errors.admissionDate?.message} />
-              </div>
-              <div className="space-y-2">
-                <Label>Situação *</Label>
-                <Select {...register('status')}>
-                  <option value="ACTIVE">Ativo</option>
-                  <option value="VACATION">Férias</option>
-                  <option value="LEAVE">Licença</option>
-                  <option value="SUSPENDED">Afastado</option>
-                  <option value="TERMINATED">Desligado</option>
-                </Select>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardContent className="p-6 space-y-6">
-            <h2 className="text-lg font-semibold text-slate-900 border-b pb-2">Dados Financeiros</h2>
-            <p className="text-sm text-slate-500 mb-4">
-              Funcionários ativos geram automaticamente uma despesa recorrente no dia do pagamento.
-            </p>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <Label>Salário (R$) *</Label>
-                <Input 
-                  {...register('salary')} 
-                  onChange={(e) => {
-                    const masked = maskCurrency(e.target.value);
-                    setValue('salary', masked as any, { shouldDirty: true });
-                  }}
-                  error={errors.salary?.message} 
-                />
+          <Card>
+            <CardContent className="p-6 space-y-6">
+              <h2 className="text-lg font-semibold text-slate-900 border-b pb-2">Dados Financeiros</h2>
+              <p className="text-sm text-slate-500 mb-4">
+                Funcionários ativos geram automaticamente uma despesa recorrente no dia do pagamento.
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label>Salário (R$) *</Label>
+                  <Input 
+                    {...register('salary')} 
+                    onChange={(e) => {
+                      const masked = maskCurrency(e.target.value);
+                      setValue('salary', masked as any, { shouldDirty: true });
+                    }}
+                    error={errors.salary?.message} 
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Dia do Pagamento *</Label>
+                  <Input type="number" min="1" max="31" {...register('payday')} error={errors.payday?.message} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Vale Transporte (R$)</Label>
+                  <Input 
+                    {...register('transportAllowance')} 
+                    onChange={(e) => {
+                      const masked = maskCurrency(e.target.value);
+                      setValue('transportAllowance', masked as any, { shouldDirty: true });
+                    }}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Vale Alimentação (R$)</Label>
+                  <Input 
+                    {...register('foodAllowance')} 
+                    onChange={(e) => {
+                      const masked = maskCurrency(e.target.value);
+                      setValue('foodAllowance', masked as any, { shouldDirty: true });
+                    }}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Chave PIX</Label>
+                  <Input {...register('pix')} />
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label>Dia do Pagamento *</Label>
-                <Input type="number" min="1" max="31" {...register('payday')} error={errors.payday?.message} />
-              </div>
-              <div className="space-y-2">
-                <Label>Vale Transporte (R$)</Label>
-                <Input 
-                  {...register('transportAllowance')} 
-                  onChange={(e) => {
-                    const masked = maskCurrency(e.target.value);
-                    setValue('transportAllowance', masked as any, { shouldDirty: true });
-                  }}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Vale Alimentação (R$)</Label>
-                <Input 
-                  {...register('foodAllowance')} 
-                  onChange={(e) => {
-                    const masked = maskCurrency(e.target.value);
-                    setValue('foodAllowance', masked as any, { shouldDirty: true });
-                  }}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Chave PIX</Label>
-                <Input {...register('pix')} />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </fieldset>
 
         <div className="flex justify-end gap-3 pt-4">
           <Button type="button" variant="outline" onClick={goBack}>
@@ -321,7 +334,7 @@ export default function EmployeeForm() {
           </Button>
           <Button type="submit">
             <Save className="w-5 h-5 mr-2" />
-            {isEditing ? 'Salvar Alterações' : 'Cadastrar Funcionário'}
+            {!isNew ? 'Salvar Alterações' : 'Cadastrar Funcionário'}
           </Button>
         </div>
       </form>
